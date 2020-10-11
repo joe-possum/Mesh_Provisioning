@@ -19,27 +19,25 @@ int myrnd(void*ctx, unsigned char *buf, size_t len) {
   return 0;
 }
 
+void hex2bin(const char *str, unsigned char *bin, int count) {
+  char buf[3];
+  unsigned int v;
+  assert(strlen(str) == (count << 1));
+  for(int i = 0; i < count; i++) {
+    strncpy(buf,str+(i<<1),2);
+    assert(1 == sscanf(buf,"%x",&v));
+    buf[i] = v;
+  }
+}
+
 int main(int argc, char *argv[]) {
   mbedtls_ecdh_context ctx;
   mbedtls_ecp_keypair kp;
   int rc;
   mbedtls_ecdh_init(&ctx);
   mbedtls_ecp_keypair_init(&kp);
-  if(argc > 1) {
-    char xstr[65], ystr[65];
-    assert(128 ==strlen(argv[1]));
-    assert(0 == (rc = mbedtls_ecp_group_load(&kp.grp, MBEDTLS_ECP_DP_SECP256R1)) || (-1 == printf("rc = -%x\n",-rc)));
-    memcpy(xstr,argv[1],64);
-    xstr[64] = 0;
-    memcpy(ystr,64+argv[1],64);
-    ystr[64] = 0;
-    printf("xstr: %s\nystr: %s\n",xstr,ystr);
-    assert(0 == (rc = mbedtls_ecp_point_read_string(&kp.Q, 16, xstr, ystr)) || (-1 == printf("rc = -%x\n",-rc)));
-    printf("    X: %s\n",hex(4*kp.Q.X.n,(uint8_t*)kp.Q.X.p));
-    printf("    Y: %s\n",hex(4*kp.Q.Y.n,(uint8_t*)kp.Q.Y.p));
-  }    
   assert(0 == (rc = mbedtls_ecp_gen_key(MBEDTLS_ECP_DP_SECP256R1,&kp,myrnd,NULL)) || (-1 == printf("rc = -%x\n",-rc)));
-  if(rc) printf("mbedtls_ecp_group_load(&grp,MBEDTLS_ECP_DP_SECP256R1) returned -%x",-rc);
+  assert(0 == (rc = mbedtls_ecp_check_pubkey(&kp.grp, &kp.Q)) || (-1 == printf("rc = -%x\n",-rc)));
   printf("rand() was called %d times\n",counter);
   printf("Keypair generated:\n");
   printf("  d:\n");
@@ -57,5 +55,19 @@ int main(int argc, char *argv[]) {
   printf("Q: %s\n",hex(4*Q.n,(uint8_t*)Q.p));
   rc = mbedtls_mpi_mul_mpi(&R,&Q,&Q);
   printf("Q*Q: %s\n",hex(4*R.n,(uint8_t*)R.p));
+  if(argc > 1) {
+    char xstr[65], ystr[65];
+    assert(128 ==strlen(argv[1]));
+    assert(0 == (rc = mbedtls_ecp_group_load(&kp.grp, MBEDTLS_ECP_DP_SECP256R1)) || (-1 == printf("rc = -%x\n",-rc)));
+    memcpy(xstr,argv[1],64);
+    xstr[64] = 0;
+    memcpy(ystr,64+argv[1],64);
+    ystr[64] = 0;
+    printf("xstr: %s\nystr: %s\n",xstr,ystr);
+    assert(0 == (rc = mbedtls_ecp_point_read_string(&kp.Q, 16, xstr, ystr)) || (-1 == printf("rc = -%x\n",-rc)));
+    printf("    X: %s\n",hex(4*kp.Q.X.n,(uint8_t*)kp.Q.X.p));
+    printf("    Y: %s\n",hex(4*kp.Q.Y.n,(uint8_t*)kp.Q.Y.p));
+    assert(0 == (rc = mbedtls_ecp_check_pubkey(&kp.grp, &kp.Q)) || (-1 == printf("rc = -%x\n",-rc)));
+  }    
   return 0;
 }
