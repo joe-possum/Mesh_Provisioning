@@ -31,7 +31,8 @@ struct public_key {
 static struct {
   uint32 advertising_interval;
   uint16 mtu;
-  struct public_key local, remote;
+  mbedtls_ecp_keypair local_kp;
+  mbedtls_ecp_point remote_point;
   uint8 connection, uuid[16], pk_x[32], pk_y[32];
 } config = { .uuid = { 0xc0, 0xff,0xee, 0xc0, 0xff,0xee, 0xc0, 0xff,0xee, 0xc0, 0xff,0xee, 0xde, 0xad, 0xbe, 0xef },
 	     .advertising_interval = 0x160,
@@ -121,9 +122,17 @@ void decode_provisioning_invite(uint8_t len, uint8_t *data) {
 }
 
 void decode_public_key(uint8_t len, uint8_t *data) {
-  memcpy(config.pk_x,data,32);
-  memcpy(config.pk_y,data+32,32);
-  send_provisioning_public_key(config.local.x, config.local.y);
+  char xstr[65], ystr[65];
+  strcpy(xstr,hex(32,data));
+  strcpy(ystr,hex(32,data+32));
+  mbedtls_ecp_keypair_init(&config.local_kp);
+  mbedtls_ecp_point_init(&config.remote_point);
+  assert(0 == (rc = mbedtls_ecp_gen_key(MBEDTLS_ECP_DP_SECP256R1,&config.local_kp,myrnd,NULL)) || (-1 == printf("rc = -%x\n",-rc)));
+  assert(0 == (rc = mbedtls_ecp_point_read_string(&config.remote_point, 16, xstr, ystr)) || (-1 == printf("rc = -%x\n",-rc)));
+  assert(0 == (rc = mbedtls_ecp_check_pubkey(&config.local_kp.grp, &config.remote_point)) || (-1 == printf("rc = -%x\n",-rc)));
+  assert(0 == (rc = mbedtls_mpi_write_binary(&config.local_kp.Q.X,xstr,32)) || (-1 == printf("rc = -%x\n",-rc)));
+  assert(0 == (rc = mbedtls_mpi_write_binary(&config.local_kp.Q.Y,ystr,32)) || (-1 == printf("rc = -%x\n",-rc)));
+  send_provisioning_public_key(xstr, ystr);
 }
 
 void decode_provisioning_pdu(uint8_t len, uint8_t *data) {
