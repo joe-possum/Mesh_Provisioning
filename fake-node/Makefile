@@ -223,7 +223,7 @@ $(OBJ_DIR)/%.o: %.S
 # Link
 $(EXE_DIR)/$(PROJECTNAME): $(OBJS) $(LIBS)
 	@echo "Linking target: $@"
-	$(CC) $(LDFLAGS) -L/usr/local/lib $^ -o $@ -lmbedtls -lmbedcrypto -lmbedx509
+	$(CC) $(LDFLAGS) -L/usr/local/lib $^ -o $@ -lmbedtls -lmbedcrypto -lmbedx509 -lm
 	chmod 0755 $@
 
 
