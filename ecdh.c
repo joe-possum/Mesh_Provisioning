@@ -30,6 +30,24 @@ void hex2bin(const char *str, unsigned char *bin, int count) {
   }
 }
 
+#define Px(X) printf(#X ": %x\n",X)
+void dump_mpi(const char *prefix, struct mbedtls_mpi *p) {
+  printf("struct mbedtls_mpi %s { int s:%d, size_t n:%ld, mpi_uint p:\n",prefix, p->s, p->n);
+}
+
+void dump_ecp_point(const char *name, struct mbedtls_ecp_point *p) {
+  printf("struct mbedtls_ecp_point %s {\n", name);
+}
+
+void dump_ecp_group(char *name, struct mbedtls_ecp_group *p) {
+  printf("struct mbedtls_ecp_group %s {\n",name);
+  Px(p->id);
+  dump_mpi("P",&p->P);
+  dump_mpi("A",&p->P);
+  dump_mpi("B",&p->P);
+  dump_ecp_point("G",&p->G);
+}
+
 int main(int argc, char *argv[]) {
   mbedtls_ecdh_context ctx;
   mbedtls_ecp_keypair kp;
@@ -38,6 +56,7 @@ int main(int argc, char *argv[]) {
   mbedtls_ecp_keypair_init(&kp);
   assert(0 == (rc = mbedtls_ecp_gen_key(MBEDTLS_ECP_DP_SECP256R1,&kp,myrnd,NULL)) || (-1 == printf("rc = -%x\n",-rc)));
   assert(0 == (rc = mbedtls_ecp_check_pubkey(&kp.grp, &kp.Q)) || (-1 == printf("rc = -%x\n",-rc)));
+  dump_ecp_group("kp.grp",&kp.grp);
   printf("rand() was called %d times\n",counter);
   printf("Keypair generated:\n");
   printf("  d:\n");
