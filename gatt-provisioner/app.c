@@ -8,6 +8,7 @@
 #include <math.h>
 #include <assert.h>
 #include <mbedtls/ecp.h>
+#include <mbedtls/ecdh.h>
 
 /* BG stack headers */
 #include "bg_types.h"
@@ -24,8 +25,8 @@ static bool appBooted = false;
 static struct {
   char *name;
   mbedtls_ecp_keypair local_kp;
-  uint8_t public_key[64];
   mbedtls_ecp_point remote_point;
+  mbedtls_mpi shared_secret;
   uint32 provisioning_service, state;
   uint16 connection_interval, mtu, provisioning_in, provisioning_out; 
   bd_addr remote;
@@ -105,6 +106,8 @@ void send_provisioning_public_key(void) {
   assert(0 == (rc = mbedtls_mpi_write_binary(&config.local_kp.Q.X,(unsigned char*)parameters,32)) || (-1 == printf("rc = -%x\n",-rc)));
   assert(0 == (rc = mbedtls_mpi_write_binary(&config.local_kp.Q.Y,(unsigned char*)parameters+32,32)) || (-1 == printf("rc = -%x\n",-rc)));
   send_provisioning_pdu(3,sizeof(parameters),parameters);
+  assert(0 == (rc = mbedtls_mpi_write_binary(&config.local_kp.d,(unsigned char*)parameters,32)) || (-1 == printf("rc = -%x\n",-rc)));
+  printf("Private key: %s\n",hex(32,parameters));  
 }
 
 void send_provisioning_start(uint8_t algorithm, uint8_t public_key, uint8_t auth_method, uint8_t auth_action, uint8_t auth_size) {
@@ -128,8 +131,12 @@ void decode_public_key(uint8_t len, uint8_t *data) {
   xstr[64] = ystr[64] = 0;
   printf("xstr: %s, ystr: %s\n",xstr, ystr);
   mbedtls_ecp_point_init(&config.remote_point);
+  mbedtls_mpi_init(&config.shared_secret);
   assert(0 == (rc = mbedtls_ecp_point_read_string(&config.remote_point, 16, xstr, ystr)) || (-1 == printf("rc = -%x\n",-rc)));
   assert(0 == (rc = mbedtls_ecp_check_pubkey(&config.local_kp.grp, &config.remote_point)) || (-1 == printf("rc = -%x\n",-rc)));
+  assert(0 == (rc = mbedtls_ecdh_compute_shared(&config.local_kp.grp,&config.shared_secret,&config.remote_point,&config.local_kp.d,myrnd,NULL)) || (-1 == printf("rc = -%x\n",-rc)));
+  assert(0 == (rc = mbedtls_mpi_write_binary(&config.shared_secret,(unsigned char*)xstr,32)) || (-1 == printf("rc = -%x\n",-rc)));
+  printf("Shared secret: %s\n",hex(32,xstr));
 }
 
 void decode_provisioning_capabilities(uint8_t len, uint8_t *data) {

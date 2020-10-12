@@ -114,7 +114,34 @@ int main(int argc, char *argv[]) {
   //mbedtls_ecdh_context ctx;
   int rc;
   //mbedtls_ecdh_init(&ctx);
-  if(argc > 1) {
+  if (5 == argc) { // <public> <private> <shared> <data>
+    mbedtls_ecp_group grp;
+    mbedtls_ecp_point public;
+    mbedtls_mpi private, shared, scratch;
+    char xstr[65], ystr[65];
+    assert(128 == strlen(argv[1]));
+    assert(64 == strlen(argv[2]));
+    assert(64 == strlen(argv[3]));
+    assert(32 == strlen(argv[4]));
+    memcpy(xstr,argv[1],64);
+    xstr[64] = 0;
+    memcpy(ystr,64+argv[1],64);
+    ystr[64] = 0;
+    mbedtls_ecp_group_init(&grp);
+    mbedtls_ecp_point_init(&public);
+    mbedtls_mpi_init(&private);
+    mbedtls_mpi_init(&shared);
+    mbedtls_mpi_init(&scratch);
+    assert(0 == (rc = mbedtls_ecp_group_load(&grp, MBEDTLS_ECP_DP_SECP256R1)) || (-1 == printf("rc = -%x\n",-rc)));
+    assert(0 == (rc = mbedtls_ecp_point_read_string(&public, 16, xstr, ystr)) || (-1 == printf("rc = -%x\n",-rc)));
+    assert(0 == (rc = mbedtls_mpi_read_string(&private, 16, argv[2])) || (-1 == printf("rc = -%x\n",-rc)));
+    assert(0 == (rc = mbedtls_mpi_read_string(&shared, 16, argv[3])) || (-1 == printf("rc = -%x\n",-rc)));
+    assert(0 == (rc = mbedtls_ecp_check_pubkey(&grp, &public)) || (-1 == printf("rc = -%x\n",-rc)));
+    printf("Public key check passed\n");
+    assert(0 == (rc = mbedtls_ecdh_compute_shared(&grp, &scratch, &public, &private,myrnd,NULL)) || (-1 == printf("rc = -%x\n",-rc)));
+    dump_mpi(0,"shared",&shared);
+    dump_mpi(0,"scratch",&scratch);
+  } else if(argc > 1) {
     mbedtls_ecp_keypair kp;
     mbedtls_ecp_keypair_init(&kp);
     char xstr[65], ystr[65];
@@ -148,7 +175,7 @@ int main(int argc, char *argv[]) {
     mbedtls_mpi_init(&shared_A);
     mbedtls_mpi_init(&shared_B);
     assert(0 == (rc = mbedtls_ecdh_compute_shared(&A.grp, &shared_A, &B.Q, &A.d,myrnd,NULL)) || (-1 == printf("rc = -%x\n",-rc)));
-    assert(0 == (rc = mbedtls_ecdh_compute_shared(&A.grp, &shared_B, &A.Q, &B.d,myrnd,NULL)) || (-1 == printf("rc = -%x\n",-rc)));
+    assert(0 == (rc = mbedtls_ecdh_compute_shared(&B.grp, &shared_B, &A.Q, &B.d,myrnd,NULL)) || (-1 == printf("rc = -%x\n",-rc)));
     dump_mpi(0,"shared A",&shared_A);
     dump_mpi(0,"shared B",&shared_B);
   }

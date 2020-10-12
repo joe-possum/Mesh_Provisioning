@@ -129,8 +129,12 @@ void decode_public_key(uint8_t len, uint8_t *data) {
   assert(0 == (rc = mbedtls_ecp_check_pubkey(&config.local_kp.grp, &config.remote_point)) || (-1 == printf("rc = -%x\n",-rc)));
   assert(0 == (rc = mbedtls_mpi_write_binary(&config.local_kp.Q.X,(unsigned char*)xstr,32)) || (-1 == printf("rc = -%x\n",-rc)));
   assert(0 == (rc = mbedtls_mpi_write_binary(&config.local_kp.Q.Y,(unsigned char*)ystr,32)) || (-1 == printf("rc = -%x\n",-rc)));
-  assert(0 == (rc = mbedtls_ecdh_compute_shared(&config.local_kp.grp, &config.shared_secret, &config.local_kp.Q, &config.local_kp.d,myrnd,NULL)) || (-1 == printf("rc = -%x\n",-rc)));
+  assert(0 == (rc = mbedtls_ecdh_compute_shared(&config.local_kp.grp, &config.shared_secret, &config.remote_point, &config.local_kp.d,myrnd,NULL)) || (-1 == printf("rc = -%x\n",-rc)));
   send_provisioning_public_key((uint8_t*)xstr, (uint8_t*)ystr);
+  assert(0 == (rc = mbedtls_mpi_write_binary(&config.local_kp.d,(unsigned char*)xstr,32)) || (-1 == printf("rc = -%x\n",-rc)));
+  assert(0 == (rc = mbedtls_mpi_write_binary(&config.shared_secret,(unsigned char*)ystr,32)) || (-1 == printf("rc = -%x\n",-rc)));
+  printf("Private key: %s\n",hex(32,(uint8*)xstr));
+  printf("Shared secret: %s\n",hex(32,(uint8*)ystr));
 }
 
 void decode_provisioning_pdu(uint8_t len, uint8_t *data) {
