@@ -72,7 +72,7 @@ void dump_mpi(int indent, const char *prefix, struct mbedtls_mpi *p) {
   printf("struct mbedtls_mpi %s { int s:%d, size_t n:%ld, mpi_uint p: ",prefix, p->s, p->n);
   char format[16];
   mbedtls_mpi_uint digits = sizeof(mbedtls_mpi_uint) << 1;
-  sprintf(format,"%%0%lldllx",digits);
+  sprintf(format,"%%0%ldlx",digits);
   for(int i = 0; i < p->n; i++) {
     printf(format,p->p[p->n-1-i]);
   }
@@ -102,13 +102,21 @@ void dump_ecp_group(int indent, char *name, struct mbedtls_ecp_group *p) {
   dump_unsigned(indent+2,"h",&p->h);
 }
 
+void dump_ecp_keypair(int indent, char *name, struct mbedtls_ecp_keypair *p) {
+  tab(indent);
+  printf("struct mbedtls_ecp_keypair %s {\n",name);
+  dump_ecp_group(indent+2,"grp",&p->grp);
+  dump_mpi(indent+2,"d",&p->d);
+  dump_ecp_point(indent+2,"Q",&p->Q);
+}
+
 int main(int argc, char *argv[]) {
-  mbedtls_ecdh_context ctx;
-  mbedtls_ecp_keypair kp;
+  //mbedtls_ecdh_context ctx;
   int rc;
-  mbedtls_ecdh_init(&ctx);
-  mbedtls_ecp_keypair_init(&kp);
+  //mbedtls_ecdh_init(&ctx);
   if(argc > 1) {
+    mbedtls_ecp_keypair kp;
+    mbedtls_ecp_keypair_init(&kp);
     char xstr[65], ystr[65];
     assert(128 ==strlen(argv[1]));
     assert(0 == (rc = mbedtls_ecp_group_load(&kp.grp, MBEDTLS_ECP_DP_SECP256R1)) || (-1 == printf("rc = -%x\n",-rc)));
@@ -126,26 +134,24 @@ int main(int argc, char *argv[]) {
     printf("    X: %s\n",hex(4*kp.Q.X.n,(uint8_t*)kp.Q.X.p));
     printf("    Y: %s\n",hex(4*kp.Q.Y.n,(uint8_t*)kp.Q.Y.p));
     assert(0 == (rc = mbedtls_ecp_check_pubkey(&kp.grp, &kp.Q)) || (-1 == printf("rc = -%x\n",-rc)));
-  }    
-  assert(0 == (rc = mbedtls_ecp_gen_key(MBEDTLS_ECP_DP_SECP256R1,&kp,myrnd,NULL)) || (-1 == printf("rc = -%x\n",-rc)));
-  assert(0 == (rc = mbedtls_ecp_check_pubkey(&kp.grp, &kp.Q)) || (-1 == printf("rc = -%x\n",-rc)));
-  dump_ecp_group(0,"kp.grp",&kp.grp);
+  } else {
+    mbedtls_ecp_keypair A, B;
+    mbedtls_ecp_keypair_init(&A);
+    mbedtls_ecp_keypair_init(&B);
+    assert(0 == (rc = mbedtls_ecp_gen_key(MBEDTLS_ECP_DP_SECP256R1,&A,myrnd,NULL)) || (-1 == printf("rc = -%x\n",-rc)));
+    assert(0 == (rc = mbedtls_ecp_gen_key(MBEDTLS_ECP_DP_SECP256R1,&B,myrnd,NULL)) || (-1 == printf("rc = -%x\n",-rc)));
+    assert(0 == (rc = mbedtls_ecp_check_pubkey(&A.grp, &A.Q)) || (-1 == printf("rc = -%x\n",-rc)));
+    assert(0 == (rc = mbedtls_ecp_check_pubkey(&B.grp, &B.Q)) || (-1 == printf("rc = -%x\n",-rc)));
+    dump_ecp_keypair(0,"A",&A);
+    dump_ecp_keypair(0,"B",&B);
+    mbedtls_mpi shared_A ,shared_B;
+    mbedtls_mpi_init(&shared_A);
+    mbedtls_mpi_init(&shared_B);
+    assert(0 == (rc = mbedtls_ecdh_compute_shared(&A.grp, &shared_A, &B.Q, &A.d,myrnd,NULL)) || (-1 == printf("rc = -%x\n",-rc)));
+    assert(0 == (rc = mbedtls_ecdh_compute_shared(&A.grp, &shared_B, &A.Q, &B.d,myrnd,NULL)) || (-1 == printf("rc = -%x\n",-rc)));
+    dump_mpi(0,"shared A",&shared_A);
+    dump_mpi(0,"shared B",&shared_B);
+  }
   printf("rand() was called %d times\n",counter);
-  printf("Keypair generated:\n");
-  printf("  d:\n");
-  printf("  Q:\n");
-  printf("    X: %s\n",hex(4*kp.Q.X.n,(uint8_t*)kp.Q.X.p));
-  printf("      s: %d\n",kp.Q.X.s);
-  printf("      n: %ld\n",kp.Q.X.n);
-  mbedtls_mpi Q, R;
-  mbedtls_mpi_init(&Q);
-  mbedtls_mpi_init(&R);
-  rc = mbedtls_mpi_div_mpi(&Q,&R,&kp.Q.X,&kp.Q.X);
-  if(rc) printf("mbedtls_mpi_div_mpi(&Q,&R,&kp.Q.X,&kp.Q.X) returned -%x",-rc);
-  printf("Q: %s\n",hex(4*Q.n,(uint8_t*)Q.p));
-  rc = mbedtls_mpi_shift_l(&Q,30);
-  printf("Q: %s\n",hex(4*Q.n,(uint8_t*)Q.p));
-  rc = mbedtls_mpi_mul_mpi(&R,&Q,&Q);
-  printf("Q*Q: %s\n",hex(4*R.n,(uint8_t*)R.p));
   return 0;
 }
