@@ -35,6 +35,7 @@ static struct {
   mbedtls_ecdh_context ctx;
   mbedtls_ecp_keypair local_kp;
   mbedtls_ecp_point remote_point;
+  mbedtls_mpi shared_secret;
   uint8 connection, uuid[16], pk_x[32], pk_y[32];
 } config = { .uuid = { 0xc0, 0xff,0xee, 0xc0, 0xff,0xee, 0xc0, 0xff,0xee, 0xc0, 0xff,0xee, 0xde, 0xad, 0xbe, 0xef },
 	     .advertising_interval = 0x160,
@@ -128,6 +129,7 @@ void decode_public_key(uint8_t len, uint8_t *data) {
   assert(0 == (rc = mbedtls_ecp_check_pubkey(&config.local_kp.grp, &config.remote_point)) || (-1 == printf("rc = -%x\n",-rc)));
   assert(0 == (rc = mbedtls_mpi_write_binary(&config.local_kp.Q.X,(unsigned char*)xstr,32)) || (-1 == printf("rc = -%x\n",-rc)));
   assert(0 == (rc = mbedtls_mpi_write_binary(&config.local_kp.Q.Y,(unsigned char*)ystr,32)) || (-1 == printf("rc = -%x\n",-rc)));
+  assert(0 == (rc = mbedtls_ecdh_compute_shared(&config.local_kp.grp, &config.shared_secret, &config.local_kp.Q, &config.local_kp.d,myrnd,NULL)) || (-1 == printf("rc = -%x\n",-rc)));
   send_provisioning_public_key((uint8_t*)xstr, (uint8_t*)ystr);
 }
 
