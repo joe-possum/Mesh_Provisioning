@@ -159,6 +159,7 @@ main.c \
 app.c \
 common.c \
 ../provisioner/fcs.c \
+../k1.c ../s1.c \
 
 # this file should be the last added
 ifeq ($(OS),posix)

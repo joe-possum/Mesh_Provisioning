@@ -7,6 +7,10 @@
 #include <stdlib.h>
 #include <math.h>
 #include <assert.h>
+#include <mbedtls/aes.h>
+#include <mbedtls/cmac.h>
+#include <mbedtls/ccm.h>
+#include <mbedtls/ecdh.h>
 
 /* BG stack headers */
 #include "bg_types.h"
@@ -19,15 +23,11 @@
 #include "common.h"
 #include "../btmesh-proxy/gatt_db.h"
 #include "../provisioner/fcs.h"
-#include <mbedtls/ecdh.h>
-
+#include "../k1.h"
+#include "../s1.h"
 
 // App booted flag
 static bool appBooted = false;
-
-struct public_key {
-  uint8_t x[32], y[32];
-};
 
 static struct {
   uint32 advertising_interval;
@@ -35,7 +35,8 @@ static struct {
   mbedtls_ecdh_context ctx;
   mbedtls_ecp_keypair local_kp;
   mbedtls_ecp_point remote_point;
-  mbedtls_mpi shared_secret;
+  uint8 shared_secret[32];
+  uint8_t local_random[16], remote_random[16];
   uint8 connection, uuid[16], pk_x[32], pk_y[32];
 } config = { .uuid = { 0xc0, 0xff,0xee, 0xc0, 0xff,0xee, 0xc0, 0xff,0xee, 0xc0, 0xff,0xee, 0xde, 0xad, 0xbe, 0xef },
 	     .advertising_interval = 0x160,
@@ -114,7 +115,6 @@ void send_provisioning_pdu(uint8_t type, uint8_t len, uint8_t *data) {
   if(type < 5)log_out(len,data);
 }
 
-
 void send_provisioning_capabilities(uint8_t elements) {
   uint8_t parameters[11] = { elements, 0, 1, };
   send_provisioning_pdu(1,sizeof(parameters),parameters);
@@ -128,9 +128,25 @@ void send_provisioning_public_key(uint8_t *x, uint8_t *y) {
 }
 
 void send_provisioning_confirmation(void) {
-  send_provisioning_pdu(5,16,(void*)send_provisioning_pdu);
-  printf("out: %s\n",hex(out_size,out_buffer));
-  printf("in: %s\n",hex(in_size,in_buffer));
+  uint8 salt[16], key[16], random_authvalue[32],result[16];
+  s1(out_size,out_buffer,salt);
+  k1(32,config.shared_secret,salt,4,(uint8*)"prck",key);
+  memcpy(random_authvalue,config.local_random,16);
+  memset(random_authvalue+32,0,32);
+  mbedtls_cipher_context_t ctx;
+  const mbedtls_cipher_info_t *cipher_info;
+  assert(cipher_info = mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_128_ECB));
+  mbedtls_cipher_init(&ctx);
+  assert(0 == mbedtls_cipher_setup(&ctx,cipher_info));
+  assert(0 == mbedtls_cipher_cmac_starts(&ctx, key, 128));
+  assert(0 == mbedtls_cipher_cmac_update(&ctx, random_authvalue, 32));
+  assert(0 == mbedtls_cipher_cmac_finish(&ctx,result));
+  send_provisioning_pdu(5,16,result);
+  printf("   out: %s\n",hex(out_size,out_buffer));
+  printf("    in: %s\n",hex(in_size,in_buffer));
+  printf("  salt: %s\n",hex(16,salt));
+  printf("   key: %s\n",hex(16,key));
+  printf("result: %s\n",hex(16,result));
 }
 
 void decode_provisioning_invite(uint8_t len, uint8_t *data) {
@@ -142,22 +158,25 @@ void decode_provisioning_invite(uint8_t len, uint8_t *data) {
 void decode_public_key(uint8_t len, uint8_t *data) {
   char xstr[65], ystr[65];
   int rc;
+  mbedtls_mpi shared_secret;
   strncpy(xstr,hex(32,data),64);
   strncpy(ystr,hex(32,data+32),64);
   xstr[64] = ystr[64] = 0;
   mbedtls_ecp_keypair_init(&config.local_kp);
   mbedtls_ecp_point_init(&config.remote_point);
+  mbedtls_mpi_init(&shared_secret);
   assert(0 == (rc = mbedtls_ecp_gen_key(MBEDTLS_ECP_DP_SECP256R1,&config.local_kp,myrnd,NULL)) || (-1 == printf("rc = -%x\n",-rc)));
   assert(0 == (rc = mbedtls_ecp_point_read_string(&config.remote_point, 16, xstr, ystr)) || (-1 == printf("rc = -%x\n",-rc)));
   assert(0 == (rc = mbedtls_ecp_check_pubkey(&config.local_kp.grp, &config.remote_point)) || (-1 == printf("rc = -%x\n",-rc)));
   assert(0 == (rc = mbedtls_mpi_write_binary(&config.local_kp.Q.X,(unsigned char*)xstr,32)) || (-1 == printf("rc = -%x\n",-rc)));
   assert(0 == (rc = mbedtls_mpi_write_binary(&config.local_kp.Q.Y,(unsigned char*)ystr,32)) || (-1 == printf("rc = -%x\n",-rc)));
-  assert(0 == (rc = mbedtls_ecdh_compute_shared(&config.local_kp.grp, &config.shared_secret, &config.remote_point, &config.local_kp.d,myrnd,NULL)) || (-1 == printf("rc = -%x\n",-rc)));
+  assert(0 == (rc = mbedtls_ecdh_compute_shared(&config.local_kp.grp, &shared_secret, &config.remote_point, &config.local_kp.d,myrnd,NULL)) || (-1 == printf("rc = -%x\n",-rc)));
+  assert(0 == (rc = mbedtls_mpi_write_binary(&shared_secret,(unsigned char*)&config.shared_secret,32)) || (-1 == printf("rc = -%x\n",-rc)));
   send_provisioning_public_key((uint8_t*)xstr, (uint8_t*)ystr);
   assert(0 == (rc = mbedtls_mpi_write_binary(&config.local_kp.d,(unsigned char*)xstr,32)) || (-1 == printf("rc = -%x\n",-rc)));
-  assert(0 == (rc = mbedtls_mpi_write_binary(&config.shared_secret,(unsigned char*)ystr,32)) || (-1 == printf("rc = -%x\n",-rc)));
+  myrnd(NULL,config.local_random,16);
   printf("Private key: %s\n",hex(32,(uint8*)xstr));
-  printf("Shared secret: %s\n",hex(32,(uint8*)ystr));
+  printf("Shared secret: %s\n",hex(32,config.shared_secret));
   send_provisioning_confirmation();
 }
 
