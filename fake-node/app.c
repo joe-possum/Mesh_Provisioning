@@ -26,6 +26,7 @@
 #include "../k1.h"
 #include "../s1.h"
 #include "../confirmation.h"
+#include "../provisioning-data.h"
 
 // App booted flag
 static bool appBooted = false;
@@ -124,6 +125,11 @@ void send_provisioning_random(uint8_t len, uint8_t *data) {
   send_provisioning_pdu(6,len,data);
 }
 
+void send_provisioning_complete(void) {
+  printf("send_provisioning_confirmation()\n");
+  send_provisioning_pdu(8,0,NULL);
+}
+
 void decode_provisioning_invite(uint8_t len, uint8_t *data) {
   uint8_t attention_timer_seconds = data[0];
   printf("  Attention Timer: %d seconds\n", attention_timer_seconds);
@@ -179,8 +185,25 @@ void decode_provisioning_random(uint8_t len, uint8_t *data) {
     printf("Confirmation value fails\n");
   } else {
     printf("Confirmation values match\n");
+    memcpy(config.remote_random,data,len);
     send_provisioning_random(16,config.local_random);
   }
+}
+
+void decode_provisioning_data(uint8_t len, uint8_t *data) { // Mesh Profile 5.4.2.5
+  uint8_t salt[16];
+  struct __attribute__((packed)) {
+    uint8_t net_key[16], key_index[2],flags[1], iv_index[4], unicast_address[2];
+  } plaintext;
+  confirmation_get_salt(salt);
+  provisioning_data_init(salt,config.remote_random,config.local_random,config.shared_secret);
+  assert(0 == provisioning_data_decrypt(&plaintext,data,data+25));
+  printf("    Network Key: %s\n",hex(16,plaintext.net_key));
+  printf("      Key Index: %s\n",hex(2,plaintext.key_index));
+  printf("          Flags: %s\n",hex(1,plaintext.flags));
+  printf("       IV Index: %s\n",hex(4,plaintext.iv_index));
+  printf("Unicast Address: %s\n",hex(2,plaintext.unicast_address));
+  send_provisioning_complete();
 }
 
 void decode_provisioning_pdu(uint8_t len, uint8_t *data) {
@@ -215,6 +238,9 @@ void decode_provisioning_pdu(uint8_t len, uint8_t *data) {
     break;
   case 6:
     decode_provisioning_random(len-1,data+1);
+    break;
+  case 7:
+    decode_provisioning_data(len-1,data+1);
     break;
   default:
     printf("UNHANDLED TYPE %d\n",type);
@@ -298,7 +324,7 @@ void appHandleEvents(struct gecko_cmd_packet *evt)
 
   case gecko_evt_le_connection_closed_id: /***************************************************************** le_connection_closed **/
 #define ED evt->data.evt_le_connection_closed
-    exit(1);
+    gecko_cmd_le_gap_start_advertising(0,le_gap_user_data,le_gap_connectable_scannable);
     break;
 #undef ED
 

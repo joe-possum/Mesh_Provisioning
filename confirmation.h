@@ -8,3 +8,4 @@ int confirmation(uint8_t*random, uint8_t*result);
   M(secret);
   M(authvalue);
 #undef M
+void confirmation_get_salt(uint8_t *salt);

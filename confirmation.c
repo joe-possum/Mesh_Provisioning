@@ -30,7 +30,11 @@ struct __attribute__((packed)) confirmation_data {
   M(random)
   M(authvalue)
 #undef M
-    
+
+void confirmation_get_salt(uint8_t *salt) {
+    memcpy(salt,confirmation_data.salt,sizeof(confirmation_data.salt));
+}
+
 static char *hex(uint8_t len, const uint8_t *in) {
   static char out[4][256];
   static uint8_t index;
