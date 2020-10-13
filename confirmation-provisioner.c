@@ -43,7 +43,7 @@ int main(int argc, char *argv[]) {
   assert(!hex2bin(argv[1],secret));
   assert(!hex2bin(argv[2],M));
   assert(!hex2bin(argv[3],random_authvalue));
-  assert(!hex2bin(argv[2],random_authvalue+16));
+  assert(!hex2bin(argv[4],random_authvalue+16));
   s1(mlen,M,confirmation_salt);
   printf("confirmation_salt: %s\n",hex(16,confirmation_salt));
   k1(32,secret,confirmation_salt,4,(uint8_t*)"prck",confirmation_key);

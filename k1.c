@@ -53,6 +53,7 @@ int k1(const int nlen, const uint8_t *n, const uint8_t *salt, int plen, uint8_t 
 #ifdef TEST
   printf("k1(n: %s, salt: %s, p: %s)\n", hex(nlen,n), hex(16,salt), hex(plen,p));
 #endif
+  //printf("n[0]: %02x, nlen: %d, p[0]: %02x, plen: %d\n",n[0],nlen,p[0],plen);
   mbedtls_cipher_context_t ctx;
   const mbedtls_cipher_info_t *cipher_info;
   uint8_t T[16];
@@ -62,12 +63,14 @@ int k1(const int nlen, const uint8_t *n, const uint8_t *salt, int plen, uint8_t 
   assert(0 == mbedtls_cipher_cmac_starts(&ctx, salt, 128));
   assert(0 == mbedtls_cipher_cmac_update(&ctx, n, nlen));
   assert(0 == mbedtls_cipher_cmac_finish(&ctx,T));  
+  //printf("    T[0]: %02x\n",T[0]);
 #ifdef TEST
   printf("     T: %s\n",hex(16,T));
 #endif
   assert(0 == mbedtls_cipher_cmac_starts(&ctx, T, 128));
   assert(0 == mbedtls_cipher_cmac_update(&ctx, p, plen));
   assert(0 == mbedtls_cipher_cmac_finish(&ctx,result));
+  //printf("result[0]: %02x\n",result[0]);
 #ifdef TEST
   printf("return: %s\n",hex(16,result));
 #endif
