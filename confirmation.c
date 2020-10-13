@@ -8,6 +8,7 @@
 #include <assert.h>
 #include "s1.h"
 #include "k1.h"
+#include "confirmation.h"
 
 static char *hex(uint8_t len, const uint8_t *in) {
   static char out[4][256];
@@ -17,6 +18,7 @@ static char *hex(uint8_t len, const uint8_t *in) {
   return &out[index++][0];
 }
 
+#ifdef TEST
 int hex2bin(const char*hex, uint8_t*bin) {
   char buf[3];
   unsigned int v;
@@ -38,13 +40,22 @@ int main(int argc, char *argv[]) {
   assert(32 == strlen(argv[4]));
   assert(0 == (mlen & 1));
   mlen >>= 1;
-  uint8_t *M, secret[32], confirmation_salt[16], confirmation_key[16], random_authvalue[32], result[16];
-  assert((M = malloc(mlen)));
+  uint8_t *message, secret[32], random[16], authvalue[16];
+  assert((message = malloc(mlen)));
   assert(!hex2bin(argv[1],secret));
-  assert(!hex2bin(argv[2],M));
-  assert(!hex2bin(argv[3],random_authvalue));
-  assert(!hex2bin(argv[4],random_authvalue+16));
-  s1(mlen,M,confirmation_salt);
+  assert(!hex2bin(argv[2],message));
+  assert(!hex2bin(argv[3],random));
+  assert(!hex2bin(argv[4],authvalue));
+  confirmation(secret, mlen, message, random, authvalue);
+  return 0;
+}
+#endif
+
+int confirmation(uint8_t*secret, int mlen, uint8_t*message, uint8_t*random, uint8_t*authvalue) {
+  uint8_t random_authvalue[32], confirmation_salt[16], confirmation_key[16], result[16];
+  memcpy(random_authvalue,random,16);
+  memcpy(random_authvalue+16,authvalue,16);
+  s1(mlen,message,confirmation_salt);
   printf("confirmation_salt: %s\n",hex(16,confirmation_salt));
   k1(32,secret,confirmation_salt,4,(uint8_t*)"prck",confirmation_key);
   printf("confirmation_key: %s\n",hex(16,confirmation_key));
