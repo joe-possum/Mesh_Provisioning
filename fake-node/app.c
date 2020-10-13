@@ -25,6 +25,7 @@
 #include "../provisioner/fcs.h"
 #include "../k1.h"
 #include "../s1.h"
+#include "../confirmation.h"
 
 // App booted flag
 static bool appBooted = false;
@@ -36,7 +37,7 @@ static struct {
   mbedtls_ecp_keypair local_kp;
   mbedtls_ecp_point remote_point;
   uint8 shared_secret[32];
-  uint8_t local_random[16], remote_random[16];
+  uint8_t local_random[16], authvalue[16], remote_random[16], remote_confirmation[16];
   uint8 connection, uuid[16], pk_x[32], pk_y[32];
 } config = { .uuid = { 0xc0, 0xff,0xee, 0xc0, 0xff,0xee, 0xc0, 0xff,0xee, 0xc0, 0xff,0xee, 0xde, 0xad, 0xbe, 0xef },
 	     .advertising_interval = 0x160,
@@ -92,31 +93,16 @@ void send_proxy_pdu(uint8_t type, uint8_t len, uint8_t *data) {
   }
 }
 
-uint8 in_buffer[32768], out_buffer[32768];
-size_t in_size = 0, out_size = 0;
-
-void log_in(uint8 len, uint8 *data) {
-  //printf("log_in(%d,...)\n",len);
-  memcpy(in_buffer+in_size,data,len);
-  in_size += len;
-}
-
-void log_out(uint8 len, uint8 *data) {
-  //printf("log_out(%d,...)\n",len);
-  memcpy(out_buffer+out_size,data,len);
-  out_size += len;
-}
-
 void send_provisioning_pdu(uint8_t type, uint8_t len, uint8_t *data) {
   uint8_t pdu[1+len];
   pdu[0] = type;
   memcpy(&pdu[1],data,len);
   send_proxy_pdu(3,sizeof(pdu),pdu);
-  if(type < 5)log_out(len,data);
 }
 
 void send_provisioning_capabilities(uint8_t elements) {
   uint8_t parameters[11] = { elements, 0, 1, };
+  confirmation_set_capabilities(sizeof(parameters),parameters);
   send_provisioning_pdu(1,sizeof(parameters),parameters);
 }
 
@@ -124,41 +110,36 @@ void send_provisioning_public_key(uint8_t *x, uint8_t *y) {
   uint8_t parameters[64];
   memcpy(parameters,x,32);
   memcpy(parameters+32,y,32);
+  confirmation_set_device_public_key(sizeof(parameters),parameters);
   send_provisioning_pdu(3,sizeof(parameters),parameters);
 }
 
-void send_provisioning_confirmation(void) {
-  uint8 salt[16], key[16], random_authvalue[32],result[16];
-  s1(out_size,out_buffer,salt);
-  k1(32,config.shared_secret,salt,4,(uint8*)"prck",key);
-  memcpy(random_authvalue,config.local_random,16);
-  memset(random_authvalue+32,0,32);
-  mbedtls_cipher_context_t ctx;
-  const mbedtls_cipher_info_t *cipher_info;
-  assert(cipher_info = mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_128_ECB));
-  mbedtls_cipher_init(&ctx);
-  assert(0 == mbedtls_cipher_setup(&ctx,cipher_info));
-  assert(0 == mbedtls_cipher_cmac_starts(&ctx, key, 128));
-  assert(0 == mbedtls_cipher_cmac_update(&ctx, random_authvalue, 32));
-  assert(0 == mbedtls_cipher_cmac_finish(&ctx,result));
-  send_provisioning_pdu(5,16,result);
-  printf("   out: %s\n",hex(out_size,out_buffer));
-  printf("    in: %s\n",hex(in_size,in_buffer));
-  printf("  salt: %s\n",hex(16,salt));
-  printf("   key: %s\n",hex(16,key));
-  printf("result: %s\n",hex(16,result));
+void send_provisioning_confirmation(uint8_t len, uint8_t *data) {
+  printf("send_provisioning_confirmation()\n");
+  send_provisioning_pdu(5,len,data);
+}
+
+void send_provisioning_random(uint8_t len, uint8_t *data) {
+  printf("send_provisioning_confirmation()\n");
+  send_provisioning_pdu(6,len,data);
 }
 
 void decode_provisioning_invite(uint8_t len, uint8_t *data) {
   uint8_t attention_timer_seconds = data[0];
   printf("  Attention Timer: %d seconds\n", attention_timer_seconds);
+  confirmation_set_invite(len,data);
   send_provisioning_capabilities(1);
+}
+
+void decode_provisioning_start(uint8_t len, uint8_t *data) {
+  confirmation_set_start(len,data);
 }
 
 void decode_public_key(uint8_t len, uint8_t *data) {
   char xstr[65], ystr[65];
   int rc;
   mbedtls_mpi shared_secret;
+  confirmation_set_provisioner_public_key(len,data);
   strncpy(xstr,hex(32,data),64);
   strncpy(ystr,hex(32,data+32),64);
   xstr[64] = ystr[64] = 0;
@@ -175,9 +156,31 @@ void decode_public_key(uint8_t len, uint8_t *data) {
   send_provisioning_public_key((uint8_t*)xstr, (uint8_t*)ystr);
   assert(0 == (rc = mbedtls_mpi_write_binary(&config.local_kp.d,(unsigned char*)xstr,32)) || (-1 == printf("rc = -%x\n",-rc)));
   myrnd(NULL,config.local_random,16);
+  memset(config.authvalue, 0, 16);
   printf("Private key: %s\n",hex(32,(uint8*)xstr));
   printf("Shared secret: %s\n",hex(32,config.shared_secret));
-  send_provisioning_confirmation();
+  confirmation_set_secret(32,config.shared_secret);
+  confirmation_set_authvalue(16,config.authvalue);
+  uint8_t result[16];
+  confirmation(config.local_random,result);
+  send_provisioning_confirmation(16,result);
+}
+
+void decode_provisioning_confirmation(uint8_t len, uint8_t *data) {
+  assert(16 == len);
+  memcpy(&config.remote_confirmation,data,len);
+}
+
+void decode_provisioning_random(uint8_t len, uint8_t *data) {
+  assert(16 == len);
+  uint8_t result[16];
+  confirmation(data,result);
+  if(memcmp(&config.remote_confirmation,result,16)) {
+    printf("Confirmation value fails\n");
+  } else {
+    printf("Confirmation values match\n");
+    send_provisioning_random(16,config.local_random);
+  }
 }
 
 void decode_provisioning_pdu(uint8_t len, uint8_t *data) {
@@ -197,14 +200,24 @@ void decode_provisioning_pdu(uint8_t len, uint8_t *data) {
 			"Provisioning Public Key","Provisioning Input Complete","Provisioning Confirmation",
 			"Provisioning Random","Provisioning Data","Provisioning Complete","Provisioning Failed"};
   printf("Provisioning PDU: %s, data: %s\n",typestr[type],hex(len-1,data+1));
-  log_in(len-1,data+1);
   switch(type) {
   case 0:
     decode_provisioning_invite(len-1,data+1);
     break;
+  case 2:
+    decode_provisioning_start(len-1,data+1);
+    break;
   case 3:
     decode_public_key(len-1,data+1);
     break;
+  case 5:
+    decode_provisioning_confirmation(len-1,data+1);
+    break;
+  case 6:
+    decode_provisioning_random(len-1,data+1);
+    break;
+  default:
+    printf("UNHANDLED TYPE %d\n",type);
   }
 }
 

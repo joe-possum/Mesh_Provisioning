@@ -8,7 +8,6 @@
 #include <assert.h>
 #include "k1.h"
 
-#ifdef TEST
 static char *hex(uint8_t len, const uint8_t *in) {
   static char out[4][256];
   static uint8_t index;
@@ -17,7 +16,9 @@ static char *hex(uint8_t len, const uint8_t *in) {
   return &out[index++][0];
 }
 
-int hex2bin(const char*hex, uint8_t*bin) {
+#ifdef TEST_K1
+#define VERBOSE_K1
+static int hex2bin(const char*hex, uint8_t*bin) {
   char buf[3];
   unsigned int v;
   size_t count = strlen(hex) >> 1;
@@ -50,10 +51,9 @@ int main(int argc, char *argv[]) {
 #endif
 
 int k1(const int nlen, const uint8_t *n, const uint8_t *salt, int plen, uint8_t *p, uint8_t *result) {
-#ifdef TEST
+#ifdef VERBOSE_K1
   printf("k1(n: %s, salt: %s, p: %s)\n", hex(nlen,n), hex(16,salt), hex(plen,p));
 #endif
-  //printf("n[0]: %02x, nlen: %d, p[0]: %02x, plen: %d\n",n[0],nlen,p[0],plen);
   mbedtls_cipher_context_t ctx;
   const mbedtls_cipher_info_t *cipher_info;
   uint8_t T[16];
@@ -63,15 +63,13 @@ int k1(const int nlen, const uint8_t *n, const uint8_t *salt, int plen, uint8_t 
   assert(0 == mbedtls_cipher_cmac_starts(&ctx, salt, 128));
   assert(0 == mbedtls_cipher_cmac_update(&ctx, n, nlen));
   assert(0 == mbedtls_cipher_cmac_finish(&ctx,T));  
-  //printf("    T[0]: %02x\n",T[0]);
-#ifdef TEST
+#ifdef VERBOSE_K1
   printf("     T: %s\n",hex(16,T));
 #endif
   assert(0 == mbedtls_cipher_cmac_starts(&ctx, T, 128));
   assert(0 == mbedtls_cipher_cmac_update(&ctx, p, plen));
   assert(0 == mbedtls_cipher_cmac_finish(&ctx,result));
-  //printf("result[0]: %02x\n",result[0]);
-#ifdef TEST
+#ifdef VERBOSE_K1
   printf("return: %s\n",hex(16,result));
 #endif
   return 0;

@@ -10,6 +10,27 @@
 #include "k1.h"
 #include "confirmation.h"
 
+struct __attribute__((packed)) confirmation_inputs {
+  uint8_t invite[1], capabilities[11], start[5], provisioner_public_key[64], device_public_key[64];
+} confirmation_inputs;
+
+struct __attribute__((packed)) confirmation_data {
+  uint8_t secret[32], random[16], authvalue[16], salt[16], key[16];
+} confirmation_data;
+
+#define M(X) void confirmation_set_ ## X (int len, uint8_t *data) { assert(sizeof(confirmation_inputs.X) == len); memcpy(&confirmation_inputs.X,data,len); }
+  M(invite)
+  M(capabilities)
+  M(start)
+  M(provisioner_public_key)
+  M(device_public_key)
+#undef M
+#define M(X) void confirmation_set_ ## X (int len, uint8_t *data) { assert(sizeof(confirmation_data.X) == len); memcpy(&confirmation_data.X,data,len); }
+  M(secret)
+  M(random)
+  M(authvalue)
+#undef M
+    
 static char *hex(uint8_t len, const uint8_t *in) {
   static char out[4][256];
   static uint8_t index;
@@ -18,7 +39,7 @@ static char *hex(uint8_t len, const uint8_t *in) {
   return &out[index++][0];
 }
 
-#ifdef TEST
+#ifdef TEST_CONFIRMATION
 int hex2bin(const char*hex, uint8_t*bin) {
   char buf[3];
   unsigned int v;
@@ -32,40 +53,77 @@ int hex2bin(const char*hex, uint8_t*bin) {
 }
 
 int main(int argc, char *argv[]) {
-  assert((5 == argc) || ("confirmation-provisioner <ecdh-secret> <confirmation-inputs> <random> <authvalue>" == NULL));
-  printf("confirmation-provisioner\n");
-  int mlen = strlen(argv[2]);
-  assert(64 == strlen(argv[1]));
-  assert(32 == strlen(argv[3]));
-  assert(32 == strlen(argv[4]));
-  assert(0 == (mlen & 1));
-  mlen >>= 1;
-  uint8_t *message, secret[32], random[16], authvalue[16];
-  assert((message = malloc(mlen)));
-  assert(!hex2bin(argv[1],secret));
-  assert(!hex2bin(argv[2],message));
-  assert(!hex2bin(argv[3],random));
-  assert(!hex2bin(argv[4],authvalue));
-  confirmation(secret, mlen, message, random, authvalue);
+  assert((9 == argc) || ("confirmation <invite> <capabilities> <start> <provisioner-pk> <device-pk> <ecdh-secret> <random> <authvalue>" == NULL));
+  assert(145 == sizeof(confirmation_inputs));
+#define M(X,Y) assert((sizeof(confirmation_inputs.X) << 1) == strlen(argv[Y]))
+  M(invite,1);
+  M(capabilities,2);
+  M(start,3);
+  M(provisioner_public_key,4);
+  M(device_public_key,5);
+#undef M
+#define M(X,Y) assert((sizeof(confirmation_data.X) << 1) == strlen(argv[Y]))
+  M(secret,6);
+  M(random,7);
+  M(authvalue,8);
+#undef M
+  uint8_t result[16];
+  struct confirmation_inputs inputs;
+  struct confirmation_data data;
+#define M(X,Y) assert(!hex2bin(argv[Y],inputs.X))
+  M(invite,1);
+  M(capabilities,2);
+  M(start,3);
+  M(provisioner_public_key,4);
+  M(device_public_key,5);
+#undef M
+#define M(X,Y) assert(!hex2bin(argv[Y],data.X))
+  M(secret,6);
+  M(random,7);
+  M(authvalue,8);
+#undef M
+#define M(X) confirmation_set_ ## X (sizeof(inputs.X),inputs.X)
+  M(invite);
+  M(capabilities);
+  M(start);
+  M(provisioner_public_key);
+  M(device_public_key);
+#undef M
+#define M(X) confirmation_set_ ## X (sizeof(data.X),data.X)
+  M(secret);
+  M(authvalue);
+#undef M  
+  confirmation(data.random,result);
   return 0;
 }
 #endif
 
-int confirmation(uint8_t*secret, int mlen, uint8_t*message, uint8_t*random, uint8_t*authvalue) {
-  uint8_t random_authvalue[32], confirmation_salt[16], confirmation_key[16], result[16];
-  memcpy(random_authvalue,random,16);
-  memcpy(random_authvalue+16,authvalue,16);
-  s1(mlen,message,confirmation_salt);
-  printf("confirmation_salt: %s\n",hex(16,confirmation_salt));
-  k1(32,secret,confirmation_salt,4,(uint8_t*)"prck",confirmation_key);
-  printf("confirmation_key: %s\n",hex(16,confirmation_key));
+int confirmation(uint8_t*random, uint8_t*result) {
+  printf("confirmation(%s):\n",hex(16,random));
+  confirmation_set_random(16,random);
+#define M(X) printf("%24s: %s\n",#X,hex(sizeof(confirmation_inputs.X),confirmation_inputs.X))
+  M(invite);
+  M(capabilities);
+  M(start);
+  M(provisioner_public_key);
+  M(device_public_key);
+#undef M  
+#define M(X) printf("%24s: %s\n",#X,hex(sizeof(confirmation_data.X),confirmation_data.X))
+  M(secret);
+  M(random);
+  M(authvalue);
+  s1(sizeof(confirmation_inputs),(void*)&confirmation_inputs,confirmation_data.salt);
+  M(salt);
+  k1(32,confirmation_data.secret,confirmation_data.salt,4,(uint8_t*)"prck",confirmation_data.key);
+  M(key);
+#undef M  
   mbedtls_cipher_context_t ctx;
   const mbedtls_cipher_info_t *cipher_info;
   assert(cipher_info = mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_128_ECB));
   mbedtls_cipher_init(&ctx);
   assert(0 == mbedtls_cipher_setup(&ctx,cipher_info));
-  assert(0 == mbedtls_cipher_cmac_starts(&ctx, confirmation_key, 128));
-  assert(0 == mbedtls_cipher_cmac_update(&ctx, random_authvalue, 32));
+  assert(0 == mbedtls_cipher_cmac_starts(&ctx, confirmation_data.key, 128));
+  assert(0 == mbedtls_cipher_cmac_update(&ctx, confirmation_data.random, 32)); // abuse packed structure
   assert(0 == mbedtls_cipher_cmac_finish(&ctx,result));
   printf("result: %s\n",hex(16,result));
   mbedtls_cipher_free(&ctx);

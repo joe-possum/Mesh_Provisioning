@@ -8,7 +8,7 @@
 #include <assert.h>
 #include "s1.h"
 
-#ifdef TEST
+#ifdef TEST_S1
 static char *hex(uint8_t len, const uint8_t *in) {
   static char out[4][256];
   static uint8_t index;
