@@ -1,8 +1,16 @@
-test : ecdh
+test : ecdh k1 s1
 	./ecdh e38bb34946b0ddc6443e7eefe58549757d0e61de262d23ae88931199a2a37dcc32c1809ab2aaeaeb5b25e0aa52f78827286565bd5d3a0fc8adf35ea1181f0286 2dcf462904b478d868a7ff3f2bf1fcd97a96092ca5577464c4af1528a4e957db 47d32ba008f8fda910f64cffb250ffb231a87f6a667a064b84c1ad3632041893 9d64cc0328a01c6401b820d3ddba433a
+	./k1 3216d1509884b533248541792b877f98 2ba14ffa0df84a2831938d57d276cab4 5a09d60797eeb4478aada59db3352a0d
+	./k1 ab85843a2f6d883f62e5684b38e307335fe6e1945ecd19604105c6f23221eb69 5faabe187337c71cc6c973369dcaa79a 7072636b
 
 old-test : ecdh
 	./ecdh e3393dc64a9a16135c04964ffa59ee6f641c51e38d4bc185b930508520b8a9614aad03b28a239bc495c2da5b3bb791e1b555bba641f7dd07fad98a17d259154d
 
 ecdh : ecdh.c
 	gcc -Wall -L/usr/local/lib ecdh.c -lmbedcrypto -o $@
+
+k1 : k1.c
+	gcc -DTEST -Wall -L/usr/local/lib k1.c -lmbedcrypto -o $@
+
+s1 : s1.c
+	gcc -DTEST -Wall -L/usr/local/lib s1.c -lmbedcrypto -o $@

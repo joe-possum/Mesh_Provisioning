@@ -91,12 +91,29 @@ void send_proxy_pdu(uint8_t type, uint8_t len, uint8_t *data) {
   }
 }
 
+uint8 in_buffer[32768], out_buffer[32768];
+size_t in_size = 0, out_size = 0;
+
+void log_in(uint8 len, uint8 *data) {
+  //printf("log_in(%d,...)\n",len);
+  memcpy(in_buffer+in_size,data,len);
+  in_size += len;
+}
+
+void log_out(uint8 len, uint8 *data) {
+  //printf("log_out(%d,...)\n",len);
+  memcpy(out_buffer+out_size,data,len);
+  out_size += len;
+}
+
 void send_provisioning_pdu(uint8_t type, uint8_t len, uint8_t *data) {
   uint8_t pdu[1+len];
   pdu[0] = type;
   memcpy(&pdu[1],data,len);
   send_proxy_pdu(3,sizeof(pdu),pdu);
+  if(type < 5)log_out(len,data);
 }
+
 
 void send_provisioning_capabilities(uint8_t elements) {
   uint8_t parameters[11] = { elements, 0, 1, };
@@ -108,6 +125,12 @@ void send_provisioning_public_key(uint8_t *x, uint8_t *y) {
   memcpy(parameters,x,32);
   memcpy(parameters+32,y,32);
   send_provisioning_pdu(3,sizeof(parameters),parameters);
+}
+
+void send_provisioning_confirmation(void) {
+  send_provisioning_pdu(5,16,(void*)send_provisioning_pdu);
+  printf("out: %s\n",hex(out_size,out_buffer));
+  printf("in: %s\n",hex(in_size,in_buffer));
 }
 
 void decode_provisioning_invite(uint8_t len, uint8_t *data) {
@@ -135,6 +158,7 @@ void decode_public_key(uint8_t len, uint8_t *data) {
   assert(0 == (rc = mbedtls_mpi_write_binary(&config.shared_secret,(unsigned char*)ystr,32)) || (-1 == printf("rc = -%x\n",-rc)));
   printf("Private key: %s\n",hex(32,(uint8*)xstr));
   printf("Shared secret: %s\n",hex(32,(uint8*)ystr));
+  send_provisioning_confirmation();
 }
 
 void decode_provisioning_pdu(uint8_t len, uint8_t *data) {
@@ -154,6 +178,7 @@ void decode_provisioning_pdu(uint8_t len, uint8_t *data) {
 			"Provisioning Public Key","Provisioning Input Complete","Provisioning Confirmation",
 			"Provisioning Random","Provisioning Data","Provisioning Complete","Provisioning Failed"};
   printf("Provisioning PDU: %s, data: %s\n",typestr[type],hex(len-1,data+1));
+  log_in(len-1,data+1);
   switch(type) {
   case 0:
     decode_provisioning_invite(len-1,data+1);
@@ -161,7 +186,7 @@ void decode_provisioning_pdu(uint8_t len, uint8_t *data) {
   case 3:
     decode_public_key(len-1,data+1);
     break;
-  }    
+  }
 }
 
 void decode_pdu(uint8 message_type, uint8_t len, uint8_t *data) {

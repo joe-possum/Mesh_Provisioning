@@ -139,8 +139,10 @@ int main(int argc, char *argv[]) {
     assert(0 == (rc = mbedtls_ecp_check_pubkey(&grp, &public)) || (-1 == printf("rc = -%x\n",-rc)));
     printf("Public key check passed\n");
     assert(0 == (rc = mbedtls_ecdh_compute_shared(&grp, &scratch, &public, &private,myrnd,NULL)) || (-1 == printf("rc = -%x\n",-rc)));
-    dump_mpi(0,"shared",&shared);
-    dump_mpi(0,"scratch",&scratch);
+    assert(0 == mbedtls_mpi_cmp_mpi(&shared,&scratch));
+    //dump_mpi(0,"shared",&shared);
+    //dump_mpi(0,"scratch",&scratch);
+    
   } else if(argc > 1) {
     mbedtls_ecp_keypair kp;
     mbedtls_ecp_keypair_init(&kp);
