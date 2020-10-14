@@ -247,8 +247,15 @@ void decode_provisioning_pdu(uint8_t len, uint8_t *data) {
   }
 }
 
+void decode_network_pdu(uint8 len, uint8 *data) {
+  printf("decode_network_pdu(%s)\n",hex(len,data));
+}
+
 void decode_pdu(uint8 message_type, uint8_t len, uint8_t *data) {
   switch(message_type) {
+  case 0:
+    decode_network_pdu(len,data);
+    break;
   case 3:
     decode_provisioning_pdu(len,data);
     break;
@@ -332,6 +339,7 @@ void appHandleEvents(struct gecko_cmd_packet *evt)
 #define ED evt->data.evt_gatt_server_user_write_request
     switch(ED.characteristic) {
     case gattdb_provisioning_in:
+    case gattdb_proxy_in:
       decode_proxy_pdu(ED.value.len,&ED.value.data[0]);
       break;
     }
