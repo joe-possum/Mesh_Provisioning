@@ -19,6 +19,8 @@ extern const struct bg_gattdb_def bg_gattdb_data;
 #define gattdb_device_name                     11
 #define gattdb_provisioning_in                 19
 #define gattdb_provisioning_out                21
+#define gattdb_proxy_in                        25
+#define gattdb_proxy_out                       27
 #define gattdb_ota_control                     31
 
 typedef enum
