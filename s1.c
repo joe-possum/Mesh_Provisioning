@@ -6,29 +6,10 @@
 #include <mbedtls/cmac.h>
 #include <mbedtls/ccm.h>
 #include <assert.h>
+#include "utility.h"
 #include "s1.h"
 
 #ifdef TEST_S1
-static char *hex(uint8_t len, const uint8_t *in) {
-  static char out[4][256];
-  static uint8_t index;
-  index &= 3;
-  for(int i = 0; i < len; i++) sprintf(&out[index][i<<1],"%02x",in[i]);
-  return &out[index++][0];
-}
-
-int hex2bin(const char*hex, uint8_t*bin) {
-  char buf[3];
-  unsigned int v;
-  size_t count = strlen(hex) >> 1;
-  for(int i = 0; i < count; i++) {
-    strncpy(buf,&hex[i<<1],2);
-    if(1 != sscanf(buf,"%x",&v)) return 1;
-    bin[i] = v;
-  }
-  return 0;
-}
-
 int main(int argc, char *argv[]) {
   assert((2 == argc) || ("s1 <m>" == NULL));
   int mlen = strlen(argv[1]);

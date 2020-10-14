@@ -27,6 +27,8 @@
 #include "../s1.h"
 #include "../confirmation.h"
 #include "../provisioning-data.h"
+#include "../encryption.h"
+#include "../utility.h"
 
 // App booted flag
 static bool appBooted = false;
@@ -66,23 +68,8 @@ uint8 unprovisioned_gatt_adv[29] = { 0x02,0x01,0x06,// flags
 				     0x03,0x03,0x27,0x18, // Provisioning Service
 				     0x15,0x16,0x27,0x18, }; // service data header, 16 bytes of uuid follows
 
-int myrnd(void*ctx, unsigned char *buf, size_t len) {
-  for(size_t i = 0; i < len; i++) {
-    buf[i] = rand();
-  }
-  return 0;
-}
-
 void appInit(void) {
   memcpy(&unprovisioned_gatt_adv[11],config.uuid,16);
-}
-
-static char *hex(uint8 len, const uint8_t *in) {
-  static char out[4][256];
-  static uint8 index;
-  index &= 3;
-  for(int i = 0; i < len; i++) sprintf(&out[index][i<<1],"%02x",in[i]);
-  return &out[index++][0];
 }
 
 void send_proxy_pdu(uint8_t type, uint8_t len, uint8_t *data) {
@@ -190,6 +177,15 @@ void decode_provisioning_random(uint8_t len, uint8_t *data) {
   }
 }
 
+uint32_t be2uint32(uint8_t *be) {
+  uint32_t rc = 0;
+  for(int i = 0; i < 4; i++) {
+    rc <<= 8;
+    rc |= be[i];
+  }
+  return rc;
+}
+
 void decode_provisioning_data(uint8_t len, uint8_t *data) { // Mesh Profile 5.4.2.5
   uint8_t salt[16];
   struct __attribute__((packed)) {
@@ -197,12 +193,13 @@ void decode_provisioning_data(uint8_t len, uint8_t *data) { // Mesh Profile 5.4.
   } plaintext;
   confirmation_get_salt(salt);
   provisioning_data_init(salt,config.remote_random,config.local_random,config.shared_secret);
-  assert(0 == provisioning_data_decrypt(&plaintext,data,data+25));
+  assert(0 == provisioning_data_decrypt((void*)&plaintext,data,data+25));
   printf("    Network Key: %s\n",hex(16,plaintext.net_key));
   printf("      Key Index: %s\n",hex(2,plaintext.key_index));
   printf("          Flags: %s\n",hex(1,plaintext.flags));
   printf("       IV Index: %s\n",hex(4,plaintext.iv_index));
   printf("Unicast Address: %s\n",hex(2,plaintext.unicast_address));
+  add_netkey(plaintext.net_key,be2uint32(plaintext.iv_index));
   send_provisioning_complete();
 }
 
@@ -249,6 +246,9 @@ void decode_provisioning_pdu(uint8_t len, uint8_t *data) {
 
 void decode_network_pdu(uint8 len, uint8 *data) {
   printf("decode_network_pdu(%s)\n",hex(len,data));
+  if(!deobfuscate(len,data)) {
+    
+  }
 }
 
 void decode_pdu(uint8 message_type, uint8_t len, uint8_t *data) {

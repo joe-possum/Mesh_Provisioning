@@ -6,6 +6,7 @@
 #include <mbedtls/cmac.h>
 #include <mbedtls/ccm.h>
 #include <assert.h>
+#include "utility.h"
 #include "s1.h"
 #include "k1.h"
 #include "provisioning-data.h"
@@ -14,27 +15,7 @@ struct __attribute__((packed)) provisioning_data {
   uint8_t confirmation_salt[16], provisioner_random[16], device_random[16], secret[32], provisioning_salt[16], session_key[16], nonce[13], data[25], mac[8];
 } provisioning_data;
 
-static char *hex(uint8_t len, const uint8_t *in) {
-  static char out[4][256];
-  static uint8_t index;
-  index &= 3;
-  for(int i = 0; i < len; i++) sprintf(&out[index][i<<1],"%02x",in[i]);
-  return &out[index++][0];
-}
-
 #ifdef TEST_PROVISIONING_DATA
-int hex2bin(const char*hex, uint8_t*bin) {
-  char buf[3];
-  unsigned int v;
-  size_t count = strlen(hex) >> 1;
-  for(int i = 0; i < count; i++) {
-    strncpy(buf,&hex[i<<1],2);
-    if(1 != sscanf(buf,"%x",&v)) return 1;
-    bin[i] = v;
-  }
-  return 0;
-}
-
 int main(int argc, char *argv[]) {
   assert((6 == argc)||(7 == argc) || ("provisioning_data <confirmation-salt> <random-provisioner> <random-device>" == NULL));
 #define M(X,Y) assert(((sizeof(provisioning_data.X) << 1) == strlen(argv[Y]))||(-1 == printf("actual %ld\n",strlen(argv[Y]))))

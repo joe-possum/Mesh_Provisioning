@@ -32,11 +32,11 @@ static int hex2bin(const char*hex, uint8_t*bin) {
 }
 
 int main(int argc, char *argv[]) {
-  assert((2 == argc) || ("k1 <n>" == NULL));
+  assert((2 == argc) || ("k3 <n>" == NULL));
   int nlen = strlen(argv[1]);
   assert(0 == (nlen & 1));
   nlen >>= 1;
-  uint8_t *N, salt[16], result[16];
+  uint8_t *N, result[16];
   assert((N = malloc(nlen)));
   assert(!hex2bin(argv[1],N));
   k3(nlen,N,result);
@@ -44,14 +44,14 @@ int main(int argc, char *argv[]) {
 }
 #endif
 
-int k3(const int nlen, uint8_t *n, uint8_t *result) {
+int k3(const int nlen, const uint8_t *n, uint8_t *result) {
 #ifdef VERBOSE_K3
   printf("k1(n: %s)\n", hex(nlen,n));
 #endif
   mbedtls_cipher_context_t ctx;
   const mbedtls_cipher_info_t *cipher_info;
   uint8_t salt[16], T[16], T1[16];
-  s1(4,"smk3",salt);
+  s1(4,(uint8_t*)"smk3",salt);
 #ifdef VERBOSE_K3
   printf("  salt: %s\n",hex(16,salt));
 #endif
@@ -65,7 +65,7 @@ int k3(const int nlen, uint8_t *n, uint8_t *result) {
   printf("     T: %s\n",hex(16,T));
 #endif
   assert(0 == mbedtls_cipher_cmac_starts(&ctx, T, 128));
-  assert(0 == mbedtls_cipher_cmac_update(&ctx, "id64\x01", 5));
+  assert(0 == mbedtls_cipher_cmac_update(&ctx, (uint8_t*)"id64\x01", 5));
   assert(0 == mbedtls_cipher_cmac_finish(&ctx,T1));
 #ifdef VERBOSE_K3
   printf("    T1: %s\n",hex(16,T1));
