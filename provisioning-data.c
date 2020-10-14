@@ -35,8 +35,6 @@ int hex2bin(const char*hex, uint8_t*bin) {
   return 0;
 }
 
-int provisioning_data_encrypt(uint8_t*plain, uint8_t*cypher, uint8_t*mic);
-
 int main(int argc, char *argv[]) {
   assert((6 == argc)||(7 == argc) || ("provisioning_data <confirmation-salt> <random-provisioner> <random-device>" == NULL));
 #define M(X,Y) assert(((sizeof(provisioning_data.X) << 1) == strlen(argv[Y]))||(-1 == printf("actual %ld\n",strlen(argv[Y]))))
