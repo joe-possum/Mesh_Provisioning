@@ -6,31 +6,12 @@
 #include <mbedtls/cmac.h>
 #include <mbedtls/ccm.h>
 #include <assert.h>
+#include "utility.h"
 #include "s1.h"
 #include "k3.h"
 
-static char *hex(uint8_t len, const uint8_t *in) {
-  static char out[4][256];
-  static uint8_t index;
-  index &= 3;
-  for(int i = 0; i < len; i++) sprintf(&out[index][i<<1],"%02x",in[i]);
-  return &out[index++][0];
-}
-
 #ifdef TEST_K3
 #define VERBOSE_K3
-static int hex2bin(const char*hex, uint8_t*bin) {
-  char buf[3];
-  unsigned int v;
-  size_t count = strlen(hex) >> 1;
-  for(int i = 0; i < count; i++) {
-    strncpy(buf,&hex[i<<1],2);
-    if(1 != sscanf(buf,"%x",&v)) return 1;
-    bin[i] = v;
-  }
-  return 0;
-}
-
 int main(int argc, char *argv[]) {
   assert((2 == argc) || ("k3 <n>" == NULL));
   int nlen = strlen(argv[1]);

@@ -159,7 +159,8 @@ main.c \
 app.c \
 common.c \
 ../provisioner/fcs.c \
-../k2.c ../k1.c ../s1.c ../confirmation.c ../provisioning-data.c ../encryption.c ../utility.c \
+../k2.c ../k1.c ../s1.c \
+../confirmation.c ../provisioning-data.c ../encryption.c ../utility.c ../protocol.c \
 
 # this file should be the last added
 ifeq ($(OS),posix)

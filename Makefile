@@ -1,4 +1,4 @@
-all : ecdh k1 k2 k3 k4 s1 confirmation provisioning-data
+all : ecdh k1 k2 k3 k4 s1 confirmation provisioning-data protocol
 	make -C fake-node
 
 test : test-ecdh test-k1 test-k2 test-k3 test-k4 test-confirmation test-provisioning-data
@@ -118,3 +118,6 @@ provisioning-data : provisioning-data.c k1.c s1.c utility.c
 
 encryption : encryption.c k1.c k2.c k3.c k4.c s1.c utility.c
 	gcc -DTEST_ENCRYPTION -Wall -L/usr/local/lib $^ -lmbedcrypto -o $@
+
+protocol : protocol.c encryption.c provisioning-data.c confirmation.c k1.c k2.c k3.c k4.c s1.c utility.c
+	gcc -DTEST_PROTOCOL -Wall -L/usr/local/lib $^ -lmbedcrypto -o $@
