@@ -100,12 +100,14 @@ void appHandleEvents(struct gecko_cmd_packet *evt)
   case gecko_evt_le_connection_opened_id: /***************************************************************** le_connection_opened **/
 #define ED evt->data.evt_le_connection_opened
     config.connection = ED.connection;
+    set_connection(ED.connection);
     break;
 #undef ED
 
   case gecko_evt_gatt_mtu_exchanged_id: /********************************************************************* gatt_mtu_exchanged **/
 #define ED evt->data.evt_gatt_mtu_exchanged
     config.mtu = ED.mtu;
+    set_mtu(ED.mtu);
     break;
 #undef ED
 

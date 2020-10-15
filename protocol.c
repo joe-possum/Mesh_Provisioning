@@ -18,21 +18,46 @@
 #include "encryption.h"
 #include "utility.h"
 
+#ifndef TEST_PROTOCOL
+/* BG stack headers */
+#include "bg_types.h"
+#include "gecko_bglib.h"
+#include "btmesh-proxy/gatt_db.h"
+#endif
+
 static struct config {
   mbedtls_ecdh_context ctx;
   mbedtls_ecp_keypair local_kp;
   mbedtls_ecp_point remote_point;
   uint8_t shared_secret[32];
   uint8_t local_random[16], authvalue[16], remote_random[16], remote_confirmation[16];
+#ifndef TEST_PROTOCOL
+  uint16_t mtu;
+  uint8_t connection;
+#endif
 } config;
 
-void send_proxy_pdu(uint8_t type, uint8_t len, uint8_t *data) { /*
+#ifndef TEST_PROTOCOL
+void set_mtu(uint16_t mtu) {
+  config.mtu = mtu;
+}
+
+void set_connection(uint8_t connection) {
+  config.connection = connection;
+}
+#endif
+
+void send_proxy_pdu(uint8_t type, uint8_t len, uint8_t *data) {
+#ifdef TEST_PROTOCOL
+  printf("SIMULATED OUT: %02x%s\n",type,hex(len,data));
+#else
   if(len < (config.mtu-3)) {
     uint8_t pdu[1+len];
     pdu[0] = type;
     memcpy(&pdu[1],data,len);
     gecko_cmd_gatt_server_send_characteristic_notification(config.connection,gattdb_provisioning_out,sizeof(pdu),pdu);
-    } */
+  }
+#endif
 }
 
 void send_provisioning_pdu(uint8_t type, uint8_t len, uint8_t *data) {
@@ -132,6 +157,7 @@ void decode_provisioning_random(uint8_t len, uint8_t *data) {
 }
 
 void decode_provisioning_data(uint8_t len, uint8_t *data) { // Mesh Profile 5.4.2.5
+#ifndef TEST_PROTOCOL
   uint8_t salt[16];
   struct __attribute__((packed)) {
     uint8_t net_key[16], key_index[2],flags[1], iv_index[4], unicast_address[2];
@@ -150,6 +176,7 @@ void decode_provisioning_data(uint8_t len, uint8_t *data) { // Mesh Profile 5.4.
   printf("Calculate device key ... provisioning salt: %s\n",hex(16,salt));
   k1(32,config.shared_secret,salt,4,(uint8_t*)"prdk",devkey);
   add_devkey(devkey);
+#endif
   send_provisioning_complete();
 }
 
@@ -268,6 +295,12 @@ void decode_proxy_pdu(uint8_t len, uint8_t *data) {
 
 #ifdef TEST_PROTOCOL
 int main(int argc, char* argv[]) {
+  uint8_t netkey[16], devkey[16];
+  uint32_t ivi = 0;
+  hex2bin("6D36686F8D85DB35D73D8D0AC2C3551A",netkey);
+  hex2bin("89875D5D2545A7744C4299C65CE79371",devkey);
+  add_netkey(netkey,ivi);
+  add_devkey(devkey);
   FILE *fh = fopen("gatt-log.txt","r");
   size_t size;
   fseek(fh,0,SEEK_END);
@@ -277,21 +310,26 @@ int main(int argc, char* argv[]) {
   fread(text,size,1,fh);
   fclose(fh);
   char *sptr = text;
-  char *last;
-  uint8_t packet[31];
+  char *last, *last2;
+  uint8_t packet[256];
   do {
     char *line = strtok_r(sptr,"\n",&last);
     sptr = NULL;
     if(!line) break;
     if(line) {
       int c;
-      char *t = strtok(line,":");
+      char *t = strtok_r(line,":",&last2);
+      //printf("t(characteristic):%s\n",t);
       sscanf(t,"%d",&c);
-      t = strtok(NULL,":");
-      if((19 == c)||(27 == c)) {
-	hex2bin(t,packet);
-	decode_proxy_pdu(strlen(t)>>1,packet);
-      printf("%d\n",c);
+      t = strtok_r(NULL,":",&last2);
+      //printf("t(hexstr):%s\n",t);
+      int len = strlen(t) >> 1;
+      hex2bin(t,packet);
+      if((19 == c)||(25 == c)) {
+	printf(" SIMULATED IN: %s\n",hex(len,packet));
+	decode_proxy_pdu(len,packet);
+      } else {
+	printf("OBSERVED OUT: %s\n",hex(len,packet));
       }
     }
   } while(1);
