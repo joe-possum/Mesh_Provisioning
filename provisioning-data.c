@@ -94,3 +94,8 @@ int provisioning_data_decrypt(uint8_t*plain, uint8_t*cipher, uint8_t*mac) {
   return 0;
 }
 #undef M
+
+int provisioning_data_get_salt(uint8_t *value) {
+  memcpy(value,provisioning_data.provisioning_salt,16);
+  return 0;
+}

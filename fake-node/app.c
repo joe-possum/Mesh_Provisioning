@@ -177,15 +177,6 @@ void decode_provisioning_random(uint8_t len, uint8_t *data) {
   }
 }
 
-uint32_t be2uint32(uint8_t *be) {
-  uint32_t rc = 0;
-  for(int i = 0; i < 4; i++) {
-    rc <<= 8;
-    rc |= be[i];
-  }
-  return rc;
-}
-
 void decode_provisioning_data(uint8_t len, uint8_t *data) { // Mesh Profile 5.4.2.5
   uint8_t salt[16];
   struct __attribute__((packed)) {
@@ -200,6 +191,11 @@ void decode_provisioning_data(uint8_t len, uint8_t *data) { // Mesh Profile 5.4.
   printf("       IV Index: %s\n",hex(4,plaintext.iv_index));
   printf("Unicast Address: %s\n",hex(2,plaintext.unicast_address));
   add_netkey(plaintext.net_key,be2uint32(plaintext.iv_index));
+  uint8_t devkey[16];
+  provisioning_data_get_salt(salt);
+  printf("Calculate device key ... provisioning salt: %s\n",hex(16,salt));
+  k1(32,config.shared_secret,salt,4,(uint8_t*)"prdk",devkey);
+  add_devkey(devkey);
   send_provisioning_complete();
 }
 
@@ -244,11 +240,47 @@ void decode_provisioning_pdu(uint8_t len, uint8_t *data) {
   }
 }
 
+void decode_upper_transport_access_pdu(uint8 len, uint8 *data) {
+  printf("decode_upper_transport_access_pdu(%s)\n",hex(len,data));
+}
+
+void decode_lower_transport_pdu(uint8_t nid, uint8_t ctl,uint8_t ttl, uint8_t seq,uint16_t src,uint16_t dst,uint8_t len, uint8_t *data) {
+  printf("decode_lower_transport_pdu(NID:%x, CTL:%d TTL:%d, SEQ:%06x, SRC:%04x, DST:%04x, data:%s)\n",nid,ctl,ttl,seq,src,dst,hex(len,data));
+  uint8 seg = data[0] >> 7;
+  if(ctl) {
+    if(seg) {
+      printf("Segmented control message\n");
+    } else {
+      printf("Unsegmented Control Message\n");
+    }
+  } else { // ctl == 0
+    uint8 akf = (data[0] & 0x40) >> 6, aid = data[0] & 0x3f;
+    printf("SEG:%d, AKF:%d, AID:%02x\n",seg,akf,aid);
+    if(seg) {
+      printf("Segmented Access message\n");
+      uint8_t szmic = data[1] >> 7;
+      uint16_t seqzero = ((data[1] & 0x7f) << 6) | (data[2] >> 2);
+      uint8_t sego = ((data[2] & 3) << 3) | (data[3] >> 5);
+      uint8_t segn = data[3] & 0x31;
+      printf("SZMIC:%d, SeqZero:%d, SegO:%d, SegN:%d\n",szmic,seqzero,sego,segn);
+      dev_decrypt(len-4,data+4,szmic,seqzero,src,dst,nid);
+    } else {
+      printf("Unsegmented Access message\n");
+      decode_upper_transport_access_pdu(len-1,data+1);
+    }
+  }
+}
+
 void decode_network_pdu(uint8 len, uint8 *data) {
   printf("decode_network_pdu(%s)\n",hex(len,data));
-  if(!deobfuscate(len,data)) {
-    
-  }
+  if(decrypt(len,data)) return;
+  printf(" after decryption: %s\n",hex(len,data));
+  uint8_t nid = data[0] & 0x7f;
+  uint8  ctl = data[1]>>7, ttl = data[1]&0x7f;
+  uint32 seq = be2uint24(&data[2]);
+  uint16 src = be2uint16(&data[5]);
+  uint16 dst = be2uint16(&data[7]);
+  decode_lower_transport_pdu(nid,ctl,ttl,seq,src,dst,len-9,data+9);
 }
 
 void decode_pdu(uint8 message_type, uint8_t len, uint8_t *data) {
@@ -332,6 +364,7 @@ void appHandleEvents(struct gecko_cmd_packet *evt)
   case gecko_evt_le_connection_closed_id: /***************************************************************** le_connection_closed **/
 #define ED evt->data.evt_le_connection_closed
     gecko_cmd_le_gap_start_advertising(0,le_gap_user_data,le_gap_connectable_scannable);
+    //gecko_cmd_le_gap_start_discovery(le_gap_phy_1m, le_gap_discover_observation);
     break;
 #undef ED
 
