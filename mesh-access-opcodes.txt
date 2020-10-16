@@ -1,0 +1,172 @@
+Config AppKey Add
+0x00
+Config AppKey Update
+0x01
+Config Composition Data Status
+0x02
+Config Config Model Publication Set
+0x03
+Health Current Status
+0x04
+Health Fault Status
+0x05
+Config Heartbeat Publication Status
+0x06
+Config AppKey Delete
+0x80 0x00
+Config AppKey Get
+0x80 0x01
+Config AppKey List
+0x80 0x02
+Config AppKey Status
+0x80 0x03
+Health Attention Get
+0x80 0x04
+Health Attention Set
+0x80 0x05
+Health Attention Set Unacknowledged
+0x80 0x06
+Health Attention Status
+0x80 0x07
+Config Composition Data Get
+0x80 0x08
+Config Beacon Get
+0x80 0x09
+Config Beacon Set
+0x80 0x0A
+Config Beacon Status
+0x80 0x0B
+Config Default TTL Get
+0x80 0x0C
+Config Default TTL Set
+0x80 0x0D
+Config Default TTL Status
+0x80 0x0E
+Config Friend Get
+0x80 0x0F
+Config Friend Set
+0x80 0x10
+Config Friend Status
+0x80 0x11
+Config GATT Proxy Get
+0x80 0x12
+Config GATT Proxy Set
+0x80 0x13
+Config GATT Proxy Status
+0x80 0x14
+Config Key Refresh Phase Get
+0x80 0x15
+Config Key Refresh Phase Set
+0x80 0x16
+Config Key Refresh Phase Status
+0x80 0x17
+Config Model Publication Get
+0x80 0x18
+Config Model Publication Status
+0x80 0x19
+Config Model Publication Virtual Address Set
+0x80 0x1A
+Config Model Subscription Add
+0x80 0x1B
+Config Model Subscription Delete
+0x80 0x1C
+Config Model Subscription Delete All
+0x80 0x1D
+Config Model Subscription Overwrite
+0x80 0x1E
+Config Model Subscription Status
+0x80 0x1F
+Config Model Subscription Virtual Address Add
+0x80 0x20
+Config Model Subscription Virtual Address Delete
+0x80 0x21
+Config Model Subscription Virtual Address Overwrite
+0x80 0x22
+Config Network Transmit Get
+0x80 0x23
+Config Network Transmit Set
+0x80 0x24
+Config Network Transmit Status
+0x80 0x25
+Config Relay Get
+0x80 0x26
+Config Relay Set
+0x80 0x27
+Config Relay Status
+0x80 0x28
+Config SIG Model Subscription Get
+0x80 0x29
+Config SIG Model Subscription List
+0x80 0x2A
+Config Vendor Model Subscription Get
+0x80 0x2B
+Config Vendor Model Subscription List
+0x80 0x2C
+Config Low Power Node PollTimeout Get
+0x80 0x2D
+Config Low Power Node PollTimeout Status
+0x80 0x2E
+Health Fault Clear
+0x80 0x2F
+Health Fault Clear Unacknowledged
+0x80 0x30
+Health Fault Get
+0x80 0x31
+Health Fault Test
+0x80 0x32
+Health Fault Test Unacknowledged
+0x80 0x33
+Health Period Get
+0x80 0x34
+Health Period Set
+0x80 0x35
+Health Period Set Unacknowledged
+0x80 0x36
+Health Period Status
+0x80 0x37
+Config Heartbeat Publication Get
+0x80 0x38
+Config Heartbeat Publication Set
+0x80 0x39
+Config Heartbeat Subscription Get
+0x80 0x3A
+Config Heartbeat Subscription Set
+0x80 0x3B
+Config Heartbeat Subscription Status
+0x80 0x3C
+Config Model App Bind
+0x80 0x3D
+Config Model App Status
+0x80 0x3E
+Config Model App Unbind
+0x80 0x3F
+Config NetKey Add
+0x80 0x40
+Config NetKey Delete
+0x80 0x41
+Config NetKey Get
+0x80 0x42
+Config NetKey List
+0x80 0x43
+Config NetKey Status
+0x80 0x44
+Config NetKey Update
+0x80 0x45
+Config Node Identity Get
+0x80 0x46
+Config Node Identity Set
+0x80 0x47
+Config Node Identity Status
+0x80 0x48
+Config Node Reset
+0x80 0x49
+Config Node Reset Status
+0x80 0x4A
+Config SIG Model App Get
+0x80 0x4B
+Config SIG Model App List
+0x80 0x4C
+Config Vendor Model App Get
+0x80 0x4D
+Config Vendor Model App List
+0x80 0x4E

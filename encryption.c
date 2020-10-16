@@ -35,8 +35,10 @@ struct netkey *find_netkey(uint8_t nid) {
   return NULL;
 }
 
+#define dprintf if(0)printf
+
 struct netkey *deobfuscate(uint8_t len, uint8_t data[]) {
-  printf("deobfuscate(%s)\n",hex(len,data));
+  dprintf("deobfuscate(%s)\n",hex(len,data));
   struct netkey *nk = find_netkey(data[0]&0x7f);
   if(!nk)return NULL;
   uint32_t iv = nk->iv;
@@ -59,9 +61,8 @@ struct netkey *deobfuscate(uint8_t len, uint8_t data[]) {
   return nk;
 }
 
-#define dprintf if(0)printf
 int decrypt(uint8_t len, uint8_t data[]) {
-  printf("decrypt(%s)\n",hex(len,data));
+  dprintf("decrypt(%s)\n",hex(len,data));
   struct netkey *nk = deobfuscate(len,data);
   if(!nk) return 0;
   uint8_t nonce[13];
@@ -77,7 +78,7 @@ int decrypt(uint8_t len, uint8_t data[]) {
     printf("not decrypting due to cipher_len:%d < 10\n",cipher_len);
     return 0;
   }
-  //printf("cipher text long enough, %d bytes\n",cipher_len);
+  dprintf("cipher text long enough, %d bytes\n",cipher_len);
   uint8_t *ciphertext = &data[7];
   uint8_t *mac = &data[len-mac_len];
   dprintf("         nonce: %s\n",hex(13,nonce));

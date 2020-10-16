@@ -141,7 +141,7 @@ override CFLAGS += \
 endif
 
 override CFLAGS += \
--D_BSD_SOURCE
+-D_BSD_SOURCE -DBLUETOOTH_ACTIVE
 
 # NOTE: The -Wl,--gc-sections flag may interfere with debugging using gdb.
 override LDFLAGS +=
@@ -160,7 +160,7 @@ app.c \
 common.c \
 ../provisioner/fcs.c \
 ../k2.c ../k1.c ../s1.c \
-../confirmation.c ../provisioning-data.c ../encryption.c ../utility.c ../protocol.c \
+../confirmation.c ../provisioning-data.c ../encryption.c ../utility.c ../protocol.c ../mesh-access-lookup.c \
 
 # this file should be the last added
 ifeq ($(OS),posix)

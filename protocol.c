@@ -17,12 +17,15 @@
 #include "provisioning-data.h"
 #include "encryption.h"
 #include "utility.h"
+#include "mesh-access-lookup.h"
 
 #ifndef TEST_PROTOCOL
+#ifdef BLUETOOTH_ACTIVE
 /* BG stack headers */
 #include "bg_types.h"
 #include "gecko_bglib.h"
 #include "btmesh-proxy/gatt_db.h"
+#endif
 #endif
 
 static struct config {
@@ -55,7 +58,9 @@ void send_proxy_pdu(uint8_t type, uint8_t len, uint8_t *data) {
     uint8_t pdu[1+len];
     pdu[0] = type;
     memcpy(&pdu[1],data,len);
+#ifdef BLUETOOTH_ACTIVE
     gecko_cmd_gatt_server_send_characteristic_notification(config.connection,gattdb_provisioning_out,sizeof(pdu),pdu);
+#endif
   }
 #endif
 }
@@ -232,7 +237,7 @@ void decode_access(uint8_t len, uint8_t *data) {
     }
   }
   assert(opcode != 0x7f);
-  printf("Access opcode: %x\n",opcode);
+  printf("Access opcode: %x %s\n",opcode,mesh_access_lookup(opcode));
 }
 
 void decode_upper_transport_access_pdu(uint8_t len, uint8_t *data) {
@@ -284,7 +289,7 @@ void decode_lower_transport_pdu(uint8_t nid, uint8_t ctl,uint8_t ttl, uint8_t se
 }
 
 void decode_network_pdu(uint8_t len, uint8_t *data) {
-  printf("decode_network_pdu(%s)\n",hex(len,data));
+  //printf("decode_network_pdu(%s)\n",hex(len,data));
   len = decrypt(len,data);
   if(!len) return;
   printf(" after decryption: %s\n",hex(len,data));
@@ -300,6 +305,9 @@ void decode_pdu(uint8_t message_type, uint8_t len, uint8_t *data) {
   switch(message_type) {
   case 0:
     decode_network_pdu(len,data);
+    break;
+  case 1:
+    printf("Unhandled beacon\n");
     break;
   case 3:
     decode_provisioning_pdu(len,data);
@@ -359,10 +367,10 @@ int main(int argc, char* argv[]) {
       hex2bin(t,packet);
       if((19 == c)||(25 == c)) {
 	printf(" SIMULATED IN: %s\n",hex(len,packet));
-	decode_proxy_pdu(len,packet);
       } else {
 	printf("OBSERVED OUT: %s\n",hex(len,packet));
       }
+      decode_proxy_pdu(len,packet);
     }
   } while(1);
   //printf("%s",text);
