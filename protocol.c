@@ -21,8 +21,8 @@
 #ifndef TEST_PROTOCOL
 /* BG stack headers */
 #include "bg_types.h"
-#include "gecko_bglib.h"
-#include "btmesh-proxy/gatt_db.h"
+//#include "gecko_bglib.h"
+//#include "btmesh-proxy/gatt_db.h"
 #endif
 
 static struct config {

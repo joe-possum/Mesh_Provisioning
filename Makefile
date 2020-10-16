@@ -122,5 +122,5 @@ encryption : encryption.c k1.c k2.c k3.c k4.c s1.c utility.c
 protocol : protocol.c encryption.c provisioning-data.c confirmation.c k1.c k2.c k3.c k4.c s1.c utility.c
 	gcc -DTEST_PROTOCOL -Wall -L/usr/local/lib $^ -lmbedcrypto -o $@
 
-advertising : advertising.c utility.c cic.c mesh-fault-values.c mesh-model-lookup.c provision_transaction.c
-	gcc -DTEST_PROTOCOL -Wall -L/usr/local/lib $^ -lmbedcrypto -o $@
+advertising : advertising.c utility.c cic.c mesh-fault-values.c mesh-model-lookup.c provision_transaction.c protocol.c confirmation.c encryption.c k1.c k2.c s1.c
+	gcc -DTEST_ADVERTISING -Wall -L/usr/local/lib $^ -lmbedcrypto -o $@
