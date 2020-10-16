@@ -31,7 +31,7 @@ int hex2bin(const char*hex, uint8_t*bin) {
   return 0;
 }
 
-uint32_t be2uint32(uint8_t *be) {
+uint32_t be2uint32(const uint8_t *be) {
   uint32_t rc = 0;
   for(int i = 0; i < 4; i++) {
     rc <<= 8;
@@ -40,7 +40,7 @@ uint32_t be2uint32(uint8_t *be) {
   return rc;
 }
 
-uint32_t be2uint24(uint8_t *be) {
+uint32_t be2uint24(const uint8_t *be) {
   uint32_t rc = 0;
   for(int i = 0; i < 3; i++) {
     rc <<= 8;
@@ -49,7 +49,7 @@ uint32_t be2uint24(uint8_t *be) {
   return rc;
 }
 
-uint16_t be2uint16(uint8_t *be) {
+uint16_t be2uint16(const uint8_t *be) {
   uint32_t rc = 0;
   for(int i = 0; i < 2; i++) {
     rc <<= 8;

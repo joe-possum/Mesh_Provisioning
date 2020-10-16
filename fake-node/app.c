@@ -22,6 +22,7 @@
 #include "common.h"
 #include "../btmesh-proxy/gatt_db.h"
 #include "../protocol.h"
+#include "../utility.h"
 
 // App booted flag
 static bool appBooted = false;
@@ -58,6 +59,8 @@ uint8 unprovisioned_gatt_adv[29] = { 0x02,0x01,0x06,// flags
 
 void appInit(void) {
   memcpy(&unprovisioned_gatt_adv[11],config.uuid,16);
+  printf("Hello, World!\n");
+  printf("Unprovisioned beacon: %s\n",hex(29,unprovisioned_gatt_adv));
 }
 
 /***********************************************************************************************//**

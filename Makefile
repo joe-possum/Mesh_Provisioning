@@ -1,4 +1,4 @@
-all : ecdh k1 k2 k3 k4 s1 confirmation provisioning-data protocol advertising
+all : ecdh k1 k2 k3 k4 s1 confirmation provisioning-data protocol advertising aes-ccm
 	make -C fake-node
 
 test : test-ecdh test-k1 test-k2 test-k3 test-k4 test-confirmation test-provisioning-data
@@ -110,6 +110,9 @@ k4 : k4.c s1.c utility.c
 s1 : s1.c utility.c
 	gcc -DTEST_S1 -Wall -L/usr/local/lib $^ -lmbedcrypto -o $@
 
+aes-ccm : aes-ccm.c utility.c
+	gcc -DTEST_AES_CCM -Wall -L/usr/local/lib $^ -lmbedcrypto -o $@
+
 confirmation : confirmation.c k1.c s1.c utility.c
 	gcc -DTEST_CONFIRMATION -Wall -L/usr/local/lib $^ -lmbedcrypto -o $@
 
@@ -122,5 +125,5 @@ encryption : encryption.c k1.c k2.c k3.c k4.c s1.c utility.c
 protocol : protocol.c encryption.c provisioning-data.c confirmation.c k1.c k2.c k3.c k4.c s1.c utility.c
 	gcc -DTEST_PROTOCOL -Wall -L/usr/local/lib $^ -lmbedcrypto -o $@
 
-advertising : advertising.c utility.c cic.c mesh-fault-values.c mesh-model-lookup.c provision_transaction.c protocol.c confirmation.c encryption.c k1.c k2.c s1.c
+advertising : advertising.c utility.c cic.c mesh-fault-values.c mesh-model-lookup.c provision_transaction.c protocol.c confirmation.c encryption.c k1.c k2.c s1.c provisioning-data.c
 	gcc -DTEST_ADVERTISING -Wall -L/usr/local/lib $^ -lmbedcrypto -o $@

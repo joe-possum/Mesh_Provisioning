@@ -21,8 +21,8 @@
 #ifndef TEST_PROTOCOL
 /* BG stack headers */
 #include "bg_types.h"
-//#include "gecko_bglib.h"
-//#include "btmesh-proxy/gatt_db.h"
+#include "gecko_bglib.h"
+#include "btmesh-proxy/gatt_db.h"
 #endif
 
 static struct config {
@@ -221,8 +221,29 @@ void decode_provisioning_pdu(uint8_t len, uint8_t *data) {
   }
 }
 
+void decode_access(uint8_t len, uint8_t *data) {
+  uint32_t opcode = data[0];
+  if(opcode & 0x80) {
+    opcode <<= 8;
+    opcode |= data[1];
+    if(opcode &0x40) {
+      opcode <<= 8;
+      opcode |= data[2];
+    }
+  }
+  assert(opcode != 0x7f);
+  printf("Access opcode: %x\n",opcode);
+}
+
 void decode_upper_transport_access_pdu(uint8_t len, uint8_t *data) {
   printf("decode_upper_transport_access_pdu(%s)\n",hex(len,data));
+  decode_access(len,data);
+}
+
+void decode_upper_transport_control_pdu(uint8_t opcode, uint8_t len, uint8_t *data) {
+  printf("decode_upper_transport_control_pdu(opcode:%x, %s)\n",opcode, hex(len,data));
+  assert(opcode > 0);
+  assert(opcode < 0xb);
 }
 
 void decode_lower_transport_pdu(uint8_t nid, uint8_t ctl,uint8_t ttl, uint8_t seq,uint16_t src,uint16_t dst,uint8_t len, uint8_t *data) {
@@ -232,7 +253,16 @@ void decode_lower_transport_pdu(uint8_t nid, uint8_t ctl,uint8_t ttl, uint8_t se
     if(seg) {
       printf("Segmented control message\n");
     } else {
+      uint8_t opcode = data[0] & 0x7f;
+      if(0 == opcode) {
+	uint8_t obo = data[1] >> 7;
+	uint16_t seqzero = ((data[1] & 0x7f) << 5) | (data[2] >> 2);
+	uint32_t blockack = be2uint32(&data[3]);
+	printf("Segment Acknowledgement: OBO:%d, SeqZero:%x, BlockAck:%08x\n",obo,seqzero,blockack);
+	return;
+      }
       printf("Unsegmented Control Message\n");
+      decode_upper_transport_control_pdu(opcode,len-1,data+1);
     }
   } else { // ctl == 0
     uint8_t akf = (data[0] & 0x40) >> 6, aid = data[0] & 0x3f;
@@ -243,8 +273,9 @@ void decode_lower_transport_pdu(uint8_t nid, uint8_t ctl,uint8_t ttl, uint8_t se
       uint16_t seqzero = ((data[1] & 0x7f) << 6) | (data[2] >> 2);
       uint8_t sego = ((data[2] & 3) << 3) | (data[3] >> 5);
       uint8_t segn = data[3] & 0x31;
-      printf("SZMIC:%d, SeqZero:%d, SegO:%d, SegN:%d\n",szmic,seqzero,sego,segn);
+      printf("SZMIC:%d, SeqZero:%x, SegO:%d, SegN:%d\n",szmic,seqzero,sego,segn);
       dev_decrypt(len-4,data+4,szmic,seqzero,src,dst,nid);
+      decode_upper_transport_access_pdu(len-8,data+4);
     } else {
       printf("Unsegmented Access message\n");
       decode_upper_transport_access_pdu(len-1,data+1);
@@ -254,7 +285,8 @@ void decode_lower_transport_pdu(uint8_t nid, uint8_t ctl,uint8_t ttl, uint8_t se
 
 void decode_network_pdu(uint8_t len, uint8_t *data) {
   printf("decode_network_pdu(%s)\n",hex(len,data));
-  if(decrypt(len,data)) return;
+  len = decrypt(len,data);
+  if(!len) return;
   printf(" after decryption: %s\n",hex(len,data));
   uint8_t nid = data[0] & 0x7f;
   uint8_t  ctl = data[1]>>7, ttl = data[1]&0x7f;

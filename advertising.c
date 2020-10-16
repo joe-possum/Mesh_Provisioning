@@ -400,7 +400,9 @@ int main(int argc, char *argv[]) {
 	  //add_appkey(&optarg[2]);
 	  break;
 	case 'd':
-	  //add_devkey(&optarg[2]);
+	  assert(34 == strlen(optarg));
+	  hex2bin(&optarg[2],key128);
+	  add_devkey(key128);
 	  break;
 	}
       }
@@ -416,5 +418,6 @@ int main(int argc, char *argv[]) {
     if(dump_advertisement(resp->data.len,resp->data.data)) {
       return 1;
     }
+    fflush(stdout);
   }
 }

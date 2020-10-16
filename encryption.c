@@ -59,11 +59,11 @@ struct netkey *deobfuscate(uint8_t len, uint8_t data[]) {
   return nk;
 }
 
-#define dprintf if(1)printf
+#define dprintf if(0)printf
 int decrypt(uint8_t len, uint8_t data[]) {
   printf("decrypt(%s)\n",hex(len,data));
   struct netkey *nk = deobfuscate(len,data);
-  if(!nk) return 1;
+  if(!nk) return 0;
   uint8_t nonce[13];
   nonce[0] = 0;
   memcpy(&nonce[1],&data[1],6);
@@ -75,7 +75,7 @@ int decrypt(uint8_t len, uint8_t data[]) {
   int cipher_len = len - 7 - mac_len;
   if(cipher_len < 3) {
     printf("not decrypting due to cipher_len:%d < 10\n",cipher_len);
-    return 1;
+    return 0;
   }
   //printf("cipher text long enough, %d bytes\n",cipher_len);
   uint8_t *ciphertext = &data[7];
@@ -91,7 +91,7 @@ int decrypt(uint8_t len, uint8_t data[]) {
   switch(rc) {
   case MBEDTLS_ERR_CCM_AUTH_FAILED:
     dprintf("NetKey decrypt: Auth failed\n");
-    return 1;
+    return 0;
     break;
   case 0:
     dprintf("Success!\n");
@@ -100,31 +100,10 @@ int decrypt(uint8_t len, uint8_t data[]) {
     break;
   default:
     printf("mbedtls_ccm_auth_decrypt returned -%x\n",-rc);
-    return 2;
+    return 0;
     break;
   }
-  printf("return 0\n");
-  return 0;
-	/*
-        if(!akf) return;
-        for(struct appkey *ak = appkeys; ak; ak = ak->next) {
-          if(aid == ak->aid) {
-            if(0 == app_decrypt(len,buf,p,ak)) {
-              printf("    Decrypted message: ");
-              for(int i = 10; i < (len-8); i++) printf("%02x",buf[i]);
-              printf("\n");
-              decrypted = 1;
-            }
-          }
-        }
-        if(decrypted) {
-          if(!seg) {
-            dump_mesh_unsegmented_access_message(len-10-8,&buf[10],src,dst);
-          } else {
-          }
-        }
-        return;
-	*/
+  return 7+cipher_len;
 }
 
 int app_decrypt(uint8_t len, uint8_t *pdu, struct netkey *nk, struct appkey *ak) {
