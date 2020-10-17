@@ -267,7 +267,7 @@ struct segments *find_segments(uint16_t src, uint32_t seq) {
   return NULL;
 }
 
-uint8_t *new_segment(uint8 *len, uint8_t *data, uint16_t src, uint32_t seq, uint8_t offset, uint8_t last) {
+uint8_t *new_segment(uint8_t *len, uint8_t *data, uint16_t src, uint32_t seq, uint8_t offset, uint8_t last) {
   struct segments *p = find_segments(src, seq);
 }
 
@@ -301,19 +301,19 @@ void decode_lower_transport_pdu(uint8_t nid, uint8_t ctl,uint8_t ttl, uint8_t se
       printf("SZMIC:%d, SeqZero:%x, SegO:%d, SegN:%d\n",szmic,seqzero,sego,segn);
       if(segn > 0) {
 	assert((sego==segn)||(16==len));
-	memcpy(buffer+12*sego,data+4,len-4);
-	bits |= 1 << sego;
-	printf("================");
-	for(uint32_t i = (1<<31); i; i >>= 1) printf("%d",(bits&i)!=0);
-	printf("================\n");
-	if((1 << segn) == (bits+1)) {
-	  printf("Complete");
-	  decode_upper_transport_access_pdu(12*segn+len-4,buffer,szmic,seqzero,src,dst,nid);
-	  bits = 0;
-	}
-      } else {
+	//memcpy(buffer+12*sego,data+4,len-4);
+	//bits |= 1 << sego;
+	//printf("================");
+	//for(uint32_t i = (1<<31); i; i >>= 1) printf("%d",(bits&i)!=0);
+	//printf("================\n");
+	//if((1 << segn) == (bits+1)) {
+	//  printf("Complete");
+	//  decode_upper_transport_access_pdu(12*segn+len-4,buffer,szmic,seqzero,src,dst,nid);
+	//  bits = 0;
+	//}
+	//} else {
 	decode_upper_transport_access_pdu(len-4,data+4,szmic,seqzero,src,dst,nid);
-      }
+	}
     } else {
       printf("Unsegmented Access message\n");
       //decode_upper_transport_access_pdu(len-1,data+1,0,seqzero,src,dst,nid);
