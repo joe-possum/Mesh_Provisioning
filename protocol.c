@@ -240,8 +240,9 @@ void decode_access(uint8_t len, uint8_t *data) {
   printf("Access opcode: %x %s\n",opcode,mesh_access_lookup(opcode));
 }
 
-void decode_upper_transport_access_pdu(uint8_t len, uint8_t *data) {
+void decode_upper_transport_access_pdu(uint8_t len, uint8_t *data,uint8_t szmic,uint32_t seqzero,uint16_t src,uint16_t dst,uint8_t nid) {
   printf("decode_upper_transport_access_pdu(%s)\n",hex(len,data));
+  dev_decrypt(len,data,szmic,seqzero,src,dst,nid);
   decode_access(len,data);
 }
 
@@ -249,6 +250,25 @@ void decode_upper_transport_control_pdu(uint8_t opcode, uint8_t len, uint8_t *da
   printf("decode_upper_transport_control_pdu(opcode:%x, %s)\n",opcode, hex(len,data));
   assert(opcode > 0);
   assert(opcode < 0xb);
+}
+
+struct segments {
+  uint8_t *data;
+  uint32_t received;
+  uint16_t src;
+  uint32_t seq;
+  struct segments *next;
+} *segments = NULL;
+
+struct segments *find_segments(uint16_t src, uint32_t seq) {
+  for(struct segments *p = segments; p; p = p->next) {
+    if((src == p->src)&&(seq == p->seq)) return p;
+  }
+  return NULL;
+}
+
+uint8_t *new_segment(uint8 *len, uint8_t *data, uint16_t src, uint32_t seq, uint8_t offset, uint8_t last) {
+  struct segments *p = find_segments(src, seq);
 }
 
 void decode_lower_transport_pdu(uint8_t nid, uint8_t ctl,uint8_t ttl, uint8_t seq,uint16_t src,uint16_t dst,uint8_t len, uint8_t *data) {
@@ -277,13 +297,26 @@ void decode_lower_transport_pdu(uint8_t nid, uint8_t ctl,uint8_t ttl, uint8_t se
       uint8_t szmic = data[1] >> 7;
       uint16_t seqzero = ((data[1] & 0x7f) << 6) | (data[2] >> 2);
       uint8_t sego = ((data[2] & 3) << 3) | (data[3] >> 5);
-      uint8_t segn = data[3] & 0x31;
+      uint8_t segn = data[3] & 0x1f;
       printf("SZMIC:%d, SeqZero:%x, SegO:%d, SegN:%d\n",szmic,seqzero,sego,segn);
-      dev_decrypt(len-4,data+4,szmic,seqzero,src,dst,nid);
-      decode_upper_transport_access_pdu(len-8,data+4);
+      if(segn > 0) {
+	assert((sego==segn)||(16==len));
+	memcpy(buffer+12*sego,data+4,len-4);
+	bits |= 1 << sego;
+	printf("================");
+	for(uint32_t i = (1<<31); i; i >>= 1) printf("%d",(bits&i)!=0);
+	printf("================\n");
+	if((1 << segn) == (bits+1)) {
+	  printf("Complete");
+	  decode_upper_transport_access_pdu(12*segn+len-4,buffer,szmic,seqzero,src,dst,nid);
+	  bits = 0;
+	}
+      } else {
+	decode_upper_transport_access_pdu(len-4,data+4,szmic,seqzero,src,dst,nid);
+      }
     } else {
       printf("Unsegmented Access message\n");
-      decode_upper_transport_access_pdu(len-1,data+1);
+      //decode_upper_transport_access_pdu(len-1,data+1,0,seqzero,src,dst,nid);
     }
   }
 }
