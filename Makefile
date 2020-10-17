@@ -113,6 +113,9 @@ s1 : s1.c utility.c
 aes-ccm : aes-ccm.c utility.c
 	gcc -DTEST_AES_CCM -Wall -L/usr/local/lib $^ -lmbedcrypto -o $@
 
+segmented-messages : segmented-messages.c utility.c
+	gcc -DTEST_SEGMENTED_MESSAGES -Wall -L/usr/local/lib $^ -lmbedcrypto -o $@
+
 confirmation : confirmation.c k1.c s1.c utility.c
 	gcc -DTEST_CONFIRMATION -Wall -L/usr/local/lib $^ -lmbedcrypto -o $@
 
@@ -122,8 +125,8 @@ provisioning-data : provisioning-data.c k1.c s1.c utility.c
 encryption : encryption.c k1.c k2.c k3.c k4.c s1.c utility.c
 	gcc -DTEST_ENCRYPTION -Wall -L/usr/local/lib $^ -lmbedcrypto -o $@
 
-protocol : protocol.c encryption.c provisioning-data.c confirmation.c k1.c k2.c k3.c k4.c s1.c utility.c mesh-access-lookup.c
+protocol : protocol.c encryption.c provisioning-data.c confirmation.c k1.c k2.c k3.c k4.c s1.c utility.c mesh-access-lookup.c segmented-messages.c
 	gcc -DTEST_PROTOCOL -Wall -L/usr/local/lib $^ -lmbedcrypto -o $@
 
-advertising : advertising.c utility.c cic.c mesh-fault-values.c mesh-model-lookup.c provision_transaction.c protocol.c confirmation.c encryption.c k1.c k2.c s1.c provisioning-data.c mesh-access-lookup.c
+advertising : advertising.c utility.c cic.c mesh-fault-values.c mesh-model-lookup.c provision_transaction.c protocol.c confirmation.c encryption.c k1.c k2.c s1.c provisioning-data.c mesh-access-lookup.c segmented-messages.c
 	gcc -DTEST_ADVERTISING -Wall -L/usr/local/lib $^ -lmbedcrypto -o $@

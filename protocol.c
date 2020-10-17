@@ -18,6 +18,7 @@
 #include "encryption.h"
 #include "utility.h"
 #include "mesh-access-lookup.h"
+#include "segmented-messages.h"
 
 #ifndef TEST_PROTOCOL
 #ifdef BLUETOOTH_ACTIVE
@@ -252,55 +253,38 @@ void decode_upper_transport_control_pdu(uint8_t opcode, uint8_t len, uint8_t *da
   assert(opcode < 0xb);
 }
 
-struct segmented {
-  uint8_t *data;
-  uint16_t len;
-};
-  
-struct segments {
-  struct segmented rc;
-  uint8_t *received;
-  uint16_t src;
-  uint32_t seq;
-  struct segments *next;
-} *segments = NULL;
-
-struct segments *find_segments(uint16_t src, uint32_t seq) {
-  for(struct segments *p = segments; p; p = p->next) {
-    if((src == p->src)&&(seq == p->seq)) return p;
-  }
-  return NULL;
-}
-
-struct segmented *new_segment(uint8_t len,uint8_t*data,uint16_t src,uint32_t seq,uint8_t offset,uint8_t last,uint8_t size) {
-  struct segments *p = find_segments(src,seq);
-  if(!p) {
-    p = malloc(sizeof(struct segments));
-    p->next = segments;
-    segments = p;
-    p->rc.data = malloc(size*(last+1));
-    p->received = malloc(last+1);
-    memset(p->received,0,last+1);
-    p->src = src;
-    p->seq = seq;
-  }
-  p->received[offset] = len;
-  memcpy(&p->rc.data[offset*size],data,len);
-  p->rc.len = 0;
-  for(int i = 0; i <= last; i++) {
-    if(!p->received[i]) return NULL;
-    p->rc.len += p->received[i];
-  }
-  return &p->rc;
-}
-
 void decode_lower_transport_pdu(uint8_t nid, uint8_t ctl,uint8_t ttl, uint8_t seq,uint16_t src,uint16_t dst,uint8_t len, uint8_t *data) {
   printf("decode_lower_transport_pdu(NID:%x, CTL:%d TTL:%d, SEQ:%06x, SRC:%04x, DST:%04x, data:%s)\n",nid,ctl,ttl,seq,src,dst,hex(len,data));
   uint8_t seg = data[0] >> 7;
-  if(ctl) {
-    if(seg) {
+  if(seg) {
+    struct segment_data sdata = { .src = src, };
+    if(ctl) {
+      uint8_t akf = (data[0] & 0x40) >> 6, aid = data[0] & 0x3f;
+      printf("SEG:%d, AKF:%d, AID:%02x\n",seg,akf,aid);
       printf("Segmented control message\n");
     } else {
+      printf("Segmented Access message\n");
+      uint8_t szmic = data[1] >> 7;
+      uint16_t seqzero = ((data[1] & 0x7f) << 6) | (data[2] >> 2);
+      uint8_t sego = ((data[2] & 3) << 3) | (data[3] >> 5);
+      uint8_t segn = data[3] & 0x1f;
+      printf("SZMIC:%d, SeqZero:%x, SegO:%d, SegN:%d\n",szmic,seqzero,sego,segn);
+      if(segn > 0) {
+	sdata.size = 12;
+	sdata.len = len - 4;
+	sdata.seq = seqzero;
+	sdata.data = data + 4;
+	sdata.offset = sego;
+	sdata.last = segn;
+	struct segmented *rc = new_segment(&sdata);
+	if(!rc) return;
+	printf("============================== segment reassembled ==============================\n");
+	decode_upper_transport_access_pdu(rc->len,rc->data,szmic,seqzero,src,dst,nid);
+	rc->clear(rc);
+      }
+    }
+  } else {
+    if(ctl) {
       uint8_t opcode = data[0] & 0x7f;
       if(0 == opcode) {
 	uint8_t obo = data[1] >> 7;
@@ -311,22 +295,6 @@ void decode_lower_transport_pdu(uint8_t nid, uint8_t ctl,uint8_t ttl, uint8_t se
       }
       printf("Unsegmented Control Message\n");
       decode_upper_transport_control_pdu(opcode,len-1,data+1);
-    }
-  } else { // ctl == 0
-    uint8_t akf = (data[0] & 0x40) >> 6, aid = data[0] & 0x3f;
-    printf("SEG:%d, AKF:%d, AID:%02x\n",seg,akf,aid);
-    if(seg) {
-      printf("Segmented Access message\n");
-      uint8_t szmic = data[1] >> 7;
-      uint16_t seqzero = ((data[1] & 0x7f) << 6) | (data[2] >> 2);
-      uint8_t sego = ((data[2] & 3) << 3) | (data[3] >> 5);
-      uint8_t segn = data[3] & 0x1f;
-      printf("SZMIC:%d, SeqZero:%x, SegO:%d, SegN:%d\n",szmic,seqzero,sego,segn);
-      if(segn > 0) {
-	struct segmented *rc = new_segment(len-4,data+4,src,seq,sego,segn,12);
-	if(!rc) return;
-	decode_upper_transport_access_pdu(rc->len,rc->data,szmic,seqzero,src,dst,nid);
-	}
     } else {
       printf("Unsegmented Access message\n");
       //decode_upper_transport_access_pdu(len-1,data+1,0,seqzero,src,dst,nid);

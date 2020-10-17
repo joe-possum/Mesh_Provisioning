@@ -160,7 +160,8 @@ app.c \
 common.c \
 ../provisioner/fcs.c \
 ../k2.c ../k1.c ../s1.c \
-../confirmation.c ../provisioning-data.c ../encryption.c ../utility.c ../protocol.c ../mesh-access-lookup.c \
+../confirmation.c ../provisioning-data.c ../encryption.c ../utility.c \
+../protocol.c ../mesh-access-lookup.c ../segmented-messages.c \
 
 # this file should be the last added
 ifeq ($(OS),posix)
