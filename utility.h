@@ -1,3 +1,5 @@
+#include <stdint.h>
+
 /* utility.c */
 int myrnd(void *ctx, unsigned char *buf, size_t len);
 char *hex(uint8_t len, const uint8_t *in);

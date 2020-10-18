@@ -36,7 +36,7 @@ int k3(const int nlen, const uint8_t *n, uint8_t *result) {
 #ifdef VERBOSE_K3
   printf("  salt: %s\n",hex(16,salt));
 #endif
-  assert(cipher_info = mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_128_ECB));
+  assert((cipher_info = mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_128_ECB)));
   mbedtls_cipher_init(&ctx);
   assert(0 == mbedtls_cipher_setup(&ctx,cipher_info));
   assert(0 == mbedtls_cipher_cmac_starts(&ctx, salt, 128));

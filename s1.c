@@ -28,7 +28,7 @@ int s1(int len, uint8_t m[], uint8_t *result) {
   memset(key,0,16);
   mbedtls_cipher_context_t ctx;
   const mbedtls_cipher_info_t *cipher_info;
-  assert(cipher_info = mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_128_ECB));
+  assert((cipher_info = mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_128_ECB)));
   if(!cipher_info) return 1;
   mbedtls_cipher_init(&ctx);
   assert(0 == mbedtls_cipher_setup(&ctx,cipher_info));

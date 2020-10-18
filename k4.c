@@ -61,7 +61,7 @@ uint8_t k4(int klen, const uint8_t *key, uint8_t *aid) {
   uint8_t t[16];
   mbedtls_cipher_context_t ctx;
   const mbedtls_cipher_info_t *cipher_info;
-  assert(cipher_info = mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_128_ECB));
+  assert((cipher_info = mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_128_ECB)));
   mbedtls_cipher_init(&ctx);
   assert(0 == mbedtls_cipher_setup(&ctx,cipher_info));
   assert(0 == mbedtls_cipher_cmac_starts(&ctx, salt, 128));

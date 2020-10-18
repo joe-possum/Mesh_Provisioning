@@ -26,11 +26,19 @@ struct appkey {
 struct devkey {
   struct devkey *next;
   uint8_t key[16];
+  uint16_t address;
 } *devkeys = NULL;
 
 struct netkey *find_netkey(uint8_t nid) {
   for(struct netkey *nk = netkeys; nk; nk= nk->next) {
     if(nid == nk->nid) return nk;
+  }
+  return NULL;
+}
+
+struct devkey *find_devkey(uint16_t address) {
+  for(struct devkey *dk = devkeys; dk; dk= dk->next) {
+    if(address == dk->address) return dk;
   }
   return NULL;
 }
@@ -143,6 +151,8 @@ int app_decrypt(uint8_t len, uint8_t *pdu, struct netkey *nk, struct appkey *ak)
 
 int dev_decrypt(int len, uint8_t *pdu, uint8_t szmic, uint32_t seq, uint16_t src, uint16_t dst, uint8_t nid) {
   struct netkey *nk = find_netkey(nid);
+  struct devkey *dk = find_devkey(dst);
+  if(!dk) dk = find_devkey(src);
   uint8_t mic_len = (szmic) ? 8 : 4;
   int cipher_len = len - mic_len;
   uint8_t *ciphertext = pdu;
@@ -160,7 +170,7 @@ int dev_decrypt(int len, uint8_t *pdu, uint8_t szmic, uint32_t seq, uint16_t src
   printf("      devkey: %s\n",hex(16,devkeys->key));
   mbedtls_ccm_context ctx;
   mbedtls_ccm_init(&ctx);
-  assert(0 == mbedtls_ccm_setkey(&ctx,MBEDTLS_CIPHER_ID_AES,devkeys->key,128));
+  assert(0 == mbedtls_ccm_setkey(&ctx,MBEDTLS_CIPHER_ID_AES,dk->key,128));
   int rc =  mbedtls_ccm_auth_decrypt(&ctx,cipher_len,nonce,13,NULL,0,ciphertext,ciphertext,mac,4);
   switch(rc) {
   case MBEDTLS_ERR_CCM_AUTH_FAILED:
@@ -191,25 +201,27 @@ void add_netkey(const uint8_t *netkey, uint32_t iv_index) {
   for(int i = 0; i < 4; i++) {
     nk->iv_bigendian[i] = ((uint8_t*)&iv_index)[3-i];
   }
-  printf("          iv: %08x\n",nk->iv);
-  printf("iv_bigendian: %s\n",hex(4,nk->iv_bigendian));
+  printf("            iv: %08x\n",nk->iv);
+  printf("  iv_bigendian: %s\n",hex(4,nk->iv_bigendian));
   k2(16,netkey,1,(uint8_t*)"",&nk->nid,nk->encryption,nk->privacy);
   uint8_t salt[16];
   s1(4,(uint8_t*)"nkbk",&salt[0]);
   k1(16,netkey,salt,6,(uint8_t*)"id128\x01",nk->beacon);
-  printf("          NID: %x\n",nk->nid);
-  printf("enryption key: %s\n",hex(16,nk->encryption));
-  printf("  privacy key: %s\n",hex(16,nk->privacy));
+  printf("            NID: %x\n",nk->nid);
+  printf("  enryption key: %s\n",hex(16,nk->encryption));
+  printf("    privacy key: %s\n",hex(16,nk->privacy));
 }
 
-void add_devkey(const uint8_t *key128) {
+void add_devkey(const uint8_t *key128, uint16_t address) {
   printf("add_devkey(%s)\n",hex(16,key128));
   struct devkey *dk = malloc(sizeof(struct devkey));
   assert(dk);
   dk->next = devkeys;
   devkeys = dk;
   memcpy(dk->key,key128,16);
-  printf("  key: %s\n",hex(16,dk->key));
+  dk->address = address;
+  printf("      key: %s\n",hex(16,dk->key));
+  printf("  address: %04x\n",dk->address);
 }
 
 #if(0)

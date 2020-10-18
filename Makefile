@@ -1,4 +1,7 @@
-all : ecdh k1 k2 k3 k4 s1 confirmation provisioning-data protocol advertising aes-ccm
+CC = gcc
+CFLAGS = -g -Wall
+
+all : ecdh k1 k2 k3 k4 s1 confirmation provisioning-data protocol advertising aes-ccm segmented-messages
 	make -C fake-node
 
 test : test-ecdh test-k1 test-k2 test-k3 test-k4 test-confirmation test-provisioning-data
@@ -93,40 +96,40 @@ old-test : ecdh
 	./ecdh e3393dc64a9a16135c04964ffa59ee6f641c51e38d4bc185b930508520b8a9614aad03b28a239bc495c2da5b3bb791e1b555bba641f7dd07fad98a17d259154d
 
 ecdh : ecdh.c
-	gcc -Wall -L/usr/local/lib ecdh.c -lmbedcrypto -o $@
+	${CC} ${CFLAGS} -L/usr/local/lib ecdh.c -lmbedcrypto -o $@
 
 k1 : k1.c utility.c
-	gcc -DTEST_K1 -Wall -L/usr/local/lib $^ -lmbedcrypto -o $@
+	${CC} ${CFLAGS} -DTEST_K1 -L/usr/local/lib $^ -lmbedcrypto -o $@
 
 k2 : k2.c k1.c s1.c utility.c
-	gcc -DTEST_K2 -Wall -L/usr/local/lib $^ -lmbedcrypto -o $@
+	${CC} ${CFLAGS} -DTEST_K2 -L/usr/local/lib $^ -lmbedcrypto -o $@
 
 k3 : k3.c s1.c utility.c
-	gcc -DTEST_K3 -Wall -L/usr/local/lib $^ -lmbedcrypto -o $@
+	${CC} ${CFLAGS} -DTEST_K3 -L/usr/local/lib $^ -lmbedcrypto -o $@
 
 k4 : k4.c s1.c utility.c
-	gcc -DTEST_K4 -Wall -L/usr/local/lib $^ -lmbedcrypto -o $@
+	${CC} ${CFLAGS} -DTEST_K4 -L/usr/local/lib $^ -lmbedcrypto -o $@
 
 s1 : s1.c utility.c
-	gcc -DTEST_S1 -Wall -L/usr/local/lib $^ -lmbedcrypto -o $@
+	${CC} ${CFLAGS} -DTEST_S1 -L/usr/local/lib $^ -lmbedcrypto -o $@
 
 aes-ccm : aes-ccm.c utility.c
-	gcc -DTEST_AES_CCM -Wall -L/usr/local/lib $^ -lmbedcrypto -o $@
+	${CC} ${CFLAGS} -DTEST_AES_CCM -L/usr/local/lib $^ -lmbedcrypto -o $@
 
 segmented-messages : segmented-messages.c utility.c
-	gcc -DTEST_SEGMENTED_MESSAGES -Wall -L/usr/local/lib $^ -lmbedcrypto -o $@
+	${CC} ${CFLAGS} -DTEST_SEGMENTED_MESSAGES -L/usr/local/lib $^ -lmbedcrypto -o $@
 
 confirmation : confirmation.c k1.c s1.c utility.c
-	gcc -DTEST_CONFIRMATION -Wall -L/usr/local/lib $^ -lmbedcrypto -o $@
+	${CC} ${CFLAGS} -DTEST_CONFIRMATION -L/usr/local/lib $^ -lmbedcrypto -o $@
 
 provisioning-data : provisioning-data.c k1.c s1.c utility.c
-	gcc -DTEST_PROVISIONING_DATA -Wall -L/usr/local/lib $^ -lmbedcrypto -o $@
+	${CC} ${CFLAGS} -DTEST_PROVISIONING_DATA -L/usr/local/lib $^ -lmbedcrypto -o $@
 
 encryption : encryption.c k1.c k2.c k3.c k4.c s1.c utility.c
-	gcc -DTEST_ENCRYPTION -Wall -L/usr/local/lib $^ -lmbedcrypto -o $@
+	${CC} ${CFLAGS} -DTEST_ENCRYPTION -L/usr/local/lib $^ -lmbedcrypto -o $@
 
 protocol : protocol.c encryption.c provisioning-data.c confirmation.c k1.c k2.c k3.c k4.c s1.c utility.c mesh-access-lookup.c segmented-messages.c
-	gcc -DTEST_PROTOCOL -Wall -L/usr/local/lib $^ -lmbedcrypto -o $@
+	${CC} ${CFLAGS} -DTEST_PROTOCOL -L/usr/local/lib $^ -lmbedcrypto -o $@
 
 advertising : advertising.c utility.c cic.c mesh-fault-values.c mesh-model-lookup.c provision_transaction.c protocol.c confirmation.c encryption.c k1.c k2.c s1.c provisioning-data.c mesh-access-lookup.c segmented-messages.c
-	gcc -DTEST_ADVERTISING -Wall -L/usr/local/lib $^ -lmbedcrypto -o $@
+	${CC} ${CFLAGS} -DTEST_ADVERTISING -L/usr/local/lib $^ -lmbedcrypto -o $@

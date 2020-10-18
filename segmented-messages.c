@@ -45,6 +45,7 @@ int send_next(struct messages *p) {
 	dump_message(p);
 	assert(rc->len == p->length);
 	assert(0 == memcmp(rc->data,p->data,p->length));
+	rc->clear(rc);
       }
       return 0;
     }
@@ -59,6 +60,7 @@ int main(int argc, char *argv[]) {
     messages[i].quanta = 12;
     messages[i].length = 13+rand()%(30*messages[i].quanta);
     messages[i].data = malloc(messages[i].length);
+    for(int j = 0; j < messages[i].length; j++) messages[i].data[j] = rand();
     int partial = messages[i].length % messages[i].quanta;
     messages[i].seg_count = messages[i].length / messages[i].quanta;
     if(partial) messages[i].seg_count++;
@@ -100,6 +102,7 @@ struct segments {
 
 struct segments *find_segments(uint16_t src, uint32_t seq) {
   for(struct segments *p = segments; p; p = p->next) {
+    assert(p->next != p);
     if((src == p->src)&&(seq == p->seq)) return p;
   }
   return NULL;
@@ -107,10 +110,12 @@ struct segments *find_segments(uint16_t src, uint32_t seq) {
 
 static void clear(struct segmented *self) {
   free(self->data);
-  for(struct segments *p = segments; p; p = p->next) {
-    if(&p->rc == self) {
-      free(p->received);
-      free(p);
+  for(struct segments **p = &segments; *p; p = &(*p)->next) {
+    if(&(*p)->rc == self) {
+      struct segments *tp = *p;
+      *p = tp->next;
+      free(tp->received);
+      free(tp);
       return;
     }
   }
@@ -124,6 +129,7 @@ struct segmented *new_segment(struct segment_data *data) {
     p = malloc(sizeof(struct segments));
     p->next = segments;
     segments = p;
+    assert(p->next != p);
     p->rc.data = malloc(data->size*(data->last+1));
     p->rc.clear = clear;
     p->received = malloc(data->last+1);

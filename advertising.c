@@ -400,9 +400,12 @@ int main(int argc, char *argv[]) {
 	  //add_appkey(&optarg[2]);
 	  break;
 	case 'd':
-	  assert(34 == strlen(optarg));
+	  assert(strlen(optarg) > 35);
+	  assert(':' == optarg[34]);
+	  optarg[34] = 0;
+	  sscanf(&optarg[35],"%i",&iv);
 	  hex2bin(&optarg[2],key128);
-	  add_devkey(key128);
+	  add_devkey(key128,iv);
 	  break;
 	}
       }
