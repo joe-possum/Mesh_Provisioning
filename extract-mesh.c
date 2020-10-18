@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <assert.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 /* BG stack headers */
 #include "bg_types.h"
@@ -64,17 +65,22 @@ int dump_advertisement(uint8 len, uint8*data) {
 }
 
 int main(int argc, char *argv[]) {
-  FILE *fh = fopen("t","r");
-  FILE *fho = fopen("mesh.log","w");
+  if(isatty(0) || isatty(1)) {
+    printf("This program extracts mesh data from bg-ncp-dump-advertisement -L logs\n");
+    printf("Usage extract-mesh < {verbose-log} > {only-mesh-log}\n");
+    return 1;
+  }
+  //  FILE *fh = fopen("t","r");
+  //FILE *fho = fopen("mesh.log","w");
   uint8_t buf[512];
   uint8_t ss = sizeof(struct gecko_msg_le_gap_extended_scan_response_evt_t);
   struct gecko_msg_le_gap_extended_scan_response_evt_t *resp = (struct gecko_msg_le_gap_extended_scan_response_evt_t *)&buf[0];
   while(1) {
-    assert(fread(buf,ss,1,fh));
-    assert(fread(buf+ss,resp->data.len,1,fh));
+    if(1 != fread(buf,ss,1,stdin)) return 0;
+    assert((1 == fread(buf+ss,resp->data.len,1,stdin)));
     if(dump_advertisement(resp->data.len,resp->data.data)) {
-      fwrite(buf,ss+resp->data.len,1,fho);
-      fflush(fho);
+      fwrite(buf,ss+resp->data.len,1,stdout);
+      fflush(stdout);
     }
   }
   return 0;

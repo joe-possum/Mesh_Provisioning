@@ -1,7 +1,7 @@
 CC = gcc
 CFLAGS = -g -Wall
 
-all : ecdh k1 k2 k3 k4 s1 confirmation provisioning-data protocol advertising aes-ccm segmented-messages
+all : ecdh k1 k2 k3 k4 s1 confirmation provisioning-data protocol advertising aes-ccm segmented-messages extract-mesh
 	make -C fake-node
 
 test : test-ecdh test-k1 test-k2 test-k3 test-k4 test-confirmation test-provisioning-data
@@ -97,6 +97,9 @@ old-test : ecdh
 
 ecdh : ecdh.c
 	${CC} ${CFLAGS} -L/usr/local/lib ecdh.c -lmbedcrypto -o $@
+
+extract-mesh : extract-mesh.c
+	${CC} ${CFLAGS} -L/usr/local/lib $^ -o $@
 
 k1 : k1.c utility.c
 	${CC} ${CFLAGS} -DTEST_K1 -L/usr/local/lib $^ -lmbedcrypto -o $@
