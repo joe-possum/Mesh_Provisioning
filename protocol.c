@@ -18,6 +18,7 @@
 #include "encryption.h"
 #include "utility.h"
 #include "mesh-access-lookup.h"
+#include "mesh-model-lookup.h"
 #include "segmented-messages.h"
 
 #ifdef TEST_PROTOCOL
@@ -57,10 +58,16 @@ void set_connection(uint8_t connection) {
 }
 #endif
 
+#ifdef TEST_PROTOCOL
+void decode_network_pdu(uint8_t len, uint8_t *data);
+#endif
+
 void send_proxy_pdu(uint8_t type, uint8_t len, uint8_t *data) {
+  printf("send_proxy_pdu(type:%d, data:%s)\n",type,hex(len,data));
 #ifdef TEST_PROTOCOL
   printf("SIMULATED OUT: %02x%s\n",type,hex(len,data));
 #else
+  printf("mtu: %d\n",config.mtu);
   if(len < (config.mtu-3)) {
     uint8_t pdu[1+len];
     pdu[0] = type;
@@ -233,20 +240,66 @@ void decode_provisioning_pdu(uint8_t len, uint8_t *data) {
   }
 }
 
+
+void decode_dcd_status(uint8_t len, uint8_t *parameters) {
+  struct __attribute__((packed)) dcd {
+    uint16_t cid, pid, vid, crpl, features;
+  } *p = (struct dcd*)&parameters[1];
+  struct __attribute__((packed)) elements {
+    uint16_t loc;
+    uint8_t nums, numv;
+  } *e = (void*)p + 10;
+  char *features[4] = {"relay","proxy","friend","low power"};
+  printf("  Page:%02x, CID:%04x, PID:%04x, VID:%04x, CRPL:%04x, Features:%04x:",parameters[0],
+	 p->cid,p->pid,p->vid,p->crpl,p->features);
+  int count = 0;
+  for(int i = 0; i < 4; i++) {
+    if((1<<i) & p->features) {
+      printf("%s%s",(count)?"|":"",features[i]);
+      count++;
+    }
+  }
+  printf("\n");
+  len--;
+  for(int element = 0; len > ((void*)e-(void*)p); element++) {
+    printf("    Element %d: Loc:%x\n      NumS:%x: ",element,e->loc,e->nums);
+    for(int i = 0; i < e->nums; i++) {
+      printf("%s%04x",(i)?",":"",*(uint16_t*)((void*)e + 4 + 2*i));
+    }
+    printf("\n      NumV:%x\n",e->numv);
+    e = (void*)e + 4 + 2*e->nums + 3*e->numv;
+  }
+}
+
 void decode_access(uint8_t len, uint8_t *data) {
   uint32_t opcode = data[0];
+  uint8_t *parameters = data+1;
+  len--;
   if(opcode & 0x80) {
     opcode <<= 8;
     opcode |= data[1];
+    parameters++;
+    len--;
     if(opcode &0x40) {
       opcode <<= 8;
       opcode |= data[2];
+      parameters++;
+      len--;
     }
   }
   assert(opcode != 0x7f);
-  printf("Access opcode: %x %s\n",opcode,mesh_access_lookup(opcode));
+  const char *str = mesh_access_lookup(opcode);
+  if(NULL == str) str = mesh_model_lookup(opcode);
+  printf("Access opcode: %x %s, parameters: %s\n",opcode,str,hex(len,parameters));
+  switch(opcode) {
+  case 2:
+    decode_dcd_status(len,parameters);
+    break;
+  case 0x8008:
+    // TODO send_access("00ff02b0f0341220000300000004000000020003000010");
+    break;
+  }
 }
-
 struct network {
   uint8_t nid;
   uint8_t  ctl, ttl;
@@ -275,11 +328,55 @@ struct mesh_message {
   } lower;
 };
 
+int encrypt(uint8_t len, uint8_t *pdu);
+uint32_t txseq = 0x10000;
+void send_transport_pdu(struct mesh_message *message, uint8_t len, uint8_t *data, uint16_t dst, uint16_t src) {
+  uint8_t pdu[31] = {message->network.nid, 0x80|5,};
+  memcpy(&pdu[2],beuint24(txseq),3);
+  memcpy(&pdu[5],beuint16(src),2);
+  memcpy(&pdu[7],beuint16(dst),2);
+  memcpy(&pdu[9],data,len);
+  encrypt(len+9+8, pdu);
+#ifdef TEST_PROTOCOL
+  uint8_t dummy[31];
+  memcpy(dummy,pdu,len+9+8);
+  decode_network_pdu(len+9+8, dummy);
+#endif
+  send_proxy_pdu(0,len+9+8,pdu);
+}
+
+void send_unsegmented_control(struct mesh_message *message, uint8_t opcode, uint8_t len, uint8_t *data, uint16_t dst, uint16_t src) {
+  uint8_t pdu[31] = { opcode, };
+  memcpy(&pdu[1],data,len);
+  send_transport_pdu(message,len+1,pdu,dst,src);
+}
+
+void send_segment_acknowledge(struct mesh_message *message) {
+  uint16_t seqzero = message->network.seq & ((1 << 13)-1);
+  if(message->network.seg) seqzero = message->segment_info.seqzero;
+  uint32_t blockack = (1<<(1+message->segment_info.segn))-1;
+  printf("BlockAck: %04x--------------------\n",blockack);
+  uint8_t pdu[6] = {(seqzero >> 6) & 0x7f, (seqzero << 2), };
+  memcpy(&pdu[2],beuint32(blockack),4);
+  printf("Segment Ack: %s\n",hex(6,pdu));
+  send_unsegmented_control(message,0,6,pdu,message->network.src,message->network.dst);
+}
+
 void decode_upper_transport_access_pdu(struct mesh_message *message, uint8_t len, uint8_t *data) {
-  printf("decode_upper_transport_access_pdu(%s)\n",hex(len,data));
   uint8_t szmic = (message->network.seg)?message->segment_info.szmic:0;
-  uint32_t seqzero = (message->network.seg)?message->segment_info.seqzero:message->network.seq;
-  dev_decrypt(len,data,szmic,seqzero,message->network.src,message->network.dst,message->network.nid);
+  uint32_t seq = message->network.seq;
+  if(message->network.seg) {
+    int delta = (seq & ((1<<13)-1)) - message->segment_info.seqzero;
+    seq -= delta;
+  }
+  len = upper_decrypt(len,data,szmic,seq,message->network.src,message->network.dst,message->network.nid,message->lower.access_info.akf,message->lower.access_info.aid);
+  if(!len) {
+    struct network *n = &message->network;
+    printf("decode_upper_transport_access_pdu(%s)\n",hex(len,data));
+    printf("Message info: NID:%02x, CTL:%d, TTL:%x, SEQ:%06x, SRC:%04x, DST:%04x, SEG:%d\n",
+	   n->nid,n->ctl,n->ttl,n->seq,n->src,n->dst,n->seg);
+    return;
+  }
   decode_access(len,data);
 }
 
@@ -291,13 +388,13 @@ void decode_upper_transport_control_pdu(struct mesh_message *message, uint8_t le
 }
 
 void decode_lower_transport_pdu(struct mesh_message *message, uint8_t len, uint8_t *data) {
-  //  printf("decode_lower_transport_pdu(NID:%x, CTL:%d TTL:%d, SEQ:%06x, SRC:%04x, DST:%04x, data:%s)\n",nid,ctl,ttl,seq,src,dst,hex(len,data));
   struct network *n = &message->network;
   struct segment_info *s = &message->segment_info;
   struct control_info *c = &message->lower.control_info;
   struct access_info *a = &message->lower.access_info;
   struct segment_data sdata = { .src = n->src, };
   struct segmented *rc = NULL;
+  printf("decode_lower_transport_pdu(NID:%x, CTL:%d TTL:%d, SEQ:%06x, SRC:%04x, DST:%04x, data:%s)\n",n->nid,n->ctl,n->ttl,n->seq,n->src,n->dst,hex(len,data));
   n->seg = data[0] >> 7;
   if(n->ctl) {
     c->opcode = data[0] & 0x7f;
@@ -320,6 +417,7 @@ void decode_lower_transport_pdu(struct mesh_message *message, uint8_t len, uint8
       rc = new_segment(&sdata);
       if(!rc) return;
     }
+    send_segment_acknowledge(message);
   }
   if(n->seg) {
     if(n->ctl) {
@@ -327,7 +425,6 @@ void decode_lower_transport_pdu(struct mesh_message *message, uint8_t len, uint8
       printf("Segmented Control message:: SZMIC:%d, SeqZero:%x, SegO:%d, SegN:%d, Opcode:%d\n",
 	     s->szmic,s->seqzero,s->sego,s->segn,c->opcode);
       if(rc) {
-	printf("============================== segment reassembled ==============================\n");
 	decode_upper_transport_control_pdu(message, rc->len,rc->data);
 	rc->clear(rc);
       } else {
@@ -336,7 +433,6 @@ void decode_lower_transport_pdu(struct mesh_message *message, uint8_t len, uint8
     } else {
       printf("Segmented Access message:: AKF:%d, AID:%02x\n",a->akf,a->aid);
       if(rc) {
-	printf("============================== segment reassembled ==============================\n");
 	decode_upper_transport_access_pdu(message, rc->len,rc->data);
 	rc->clear(rc);
       } else {
@@ -346,6 +442,7 @@ void decode_lower_transport_pdu(struct mesh_message *message, uint8_t len, uint8
   } else {
     if(n->ctl) {
       if(0 == c->opcode) {
+	assert((len == 7)||(printf("len: %d\n",len) == -1));
 	uint8_t obo = data[1] >> 7;
 	uint16_t seqzero = ((data[1] & 0x7f) << 5) | (data[2] >> 2);
 	uint32_t blockack = be2uint32(&data[3]);
@@ -367,7 +464,7 @@ void decode_network_pdu(uint8_t len, uint8_t *data) {
   if(!len) return;
   struct mesh_message info;
   struct network *p = &info.network;
-  printf(" after decryption: %s\n",hex(len,data));
+  //printf(" after decryption: %s\n",hex(len,data));
   p->nid = data[0] & 0x7f;
   p->ctl = data[1]>>7, p->ttl = data[1]&0x7f;
   p->seq = be2uint24(&data[2]);

@@ -12,9 +12,9 @@ int myrnd(void*ctx, unsigned char *buf, size_t len) {
 }
 
 char *hex(uint8_t len, const uint8_t *in) {
-  static char out[4][256];
+  static char out[16][256];
   static uint8_t index;
-  index &= 3;
+  index &= 15;
   for(int i = 0; i < len; i++) sprintf(&out[index][i<<1],"%02x",in[i]);
   return &out[index++][0];
 }
@@ -56,6 +56,15 @@ uint16_t be2uint16(const uint8_t *be) {
     rc |= be[i];
   }
   return rc;
+}
+
+uint8_t *beuint32(uint32_t value) {
+  static uint8_t be[4];
+  for(int i = 0; i < 4; i++) {
+    be[3-i] = value & 0xff;
+    value >>= 8;
+  }
+  return be;
 }
 
 uint8_t *beuint24(uint32_t value) {

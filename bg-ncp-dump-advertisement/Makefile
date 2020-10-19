@@ -23,7 +23,7 @@ DUMMY := ${shell chmod -Rc u+rwX .}
 uniq = $(strip $(if $1,$(firstword $1) \
        $(call uniq,$(filter-out $(firstword $1),$1))))
 
-PROJECTNAME = fake-node
+PROJECTNAME = bg-ncp-dump-advertisement
 
 OBJ_DIR = build
 EXE_DIR = exe
@@ -94,7 +94,8 @@ INCLUDEPATHS += \
 -I${LOC_SDK} \
 -I${LOC_SDK}/uart \
 -I${LOC_SDK}/protocol/bluetooth/ble_stack/inc/common \
--I${LOC_SDK}/protocol/bluetooth/ble_stack/inc/host
+-I${LOC_SDK}/protocol/bluetooth/ble_stack/inc/host \
+-I/usr/local/include
 
 # -MMD : Don't generate dependencies on system header files.
 # -MP  : Add phony targets, useful when a h-file is removed from a project.
@@ -141,11 +142,14 @@ override CFLAGS += \
 endif
 
 override CFLAGS += \
--D_BSD_SOURCE -DBLUETOOTH_ACTIVE
+-D_BSD_SOURCE
 
 # NOTE: The -Wl,--gc-sections flag may interfere with debugging using gdb.
-override LDFLAGS +=
+override LDFLAGS += -L/usr/local/lib
 
+ifeq (${shell uname},Linux)
+MORELIBS := -lm
+endif
 
 ####################################################################
 # Files                                                            #
@@ -157,11 +161,18 @@ ${LOC_SDK}/protocol/bluetooth/ble_stack/src/host/gecko_bglib.c \
 ${LOC_SDK}/support.c \
 main.c \
 app.c \
-common.c \
-../provisioner/fcs.c \
-../k4.c ../k2.c ../k1.c ../s1.c \
-../confirmation.c ../provisioning-data.c ../encryption.c ../utility.c \
-../protocol.c ../mesh-access-lookup.c ../mesh-model-lookup.c ../segmented-messages.c \
+cic.c \
+provision_transaction.c \
+mesh-fault-values.c \
+mesh-model-lookup.c \
+../protocol.c \
+../utility.c \
+../encryption.c \
+../confirmation.c \
+../provisioning-data.c \
+../k1.c ../k2.c ../k3.c ../k4.c ../s1.c \
+../mesh-access-lookup.c \
+../segmented-messages.c 
 
 # this file should be the last added
 ifeq ($(OS),posix)
@@ -174,7 +185,7 @@ s_SRC +=
 
 S_SRC += 
 
-LIBS =
+LIBS = 
 
 
 ####################################################################
@@ -201,10 +212,12 @@ vpath %.S $(S_PATHS)
 all:      debug
 
 debug:    CFLAGS += -O0 -g3
-debug:    $(EXE_DIR)/$(PROJECTNAME)
+debug:    $(EXE_DIR)/$(PROJECTNAME) ${LOC_SDK}
 
 release:  $(EXE_DIR)/$(PROJECTNAME)
 
+install: release
+	install -m0755 $(EXE_DIR)/$(PROJECTNAME) /usr/local/bin
 
 # Create objects from C SRC files
 $(OBJ_DIR)/%.o: %.c
@@ -226,7 +239,7 @@ $(OBJ_DIR)/%.o: %.S
 # Link
 $(EXE_DIR)/$(PROJECTNAME): $(OBJS) $(LIBS)
 	@echo "Linking target: $@"
-	$(CC) $(LDFLAGS) -L/usr/local/lib $^ -o $@ -lmbedtls -lmbedcrypto -lmbedx509 -lm
+	$(CC) $(LDFLAGS) $^ -o $@ -lmbedtls -lmbedcrypto ${MORELIBS}
 	chmod 0755 $@
 
 
@@ -239,3 +252,20 @@ endif
 ifneq (clean,$(findstring clean, $(MAKECMDGOALS)))
 -include $(C_DEPS)
 endif
+
+${EXE_DIR}/provision_unit : ${OBJ_DIR}/provision_unit.o ${OBJ_DIR}/provision_transaction.o
+	$(CC) $(LDFLAGS) $^ -o $@
+
+${LOC_SDK} :
+	git clone https://github.com/joe-possum/ble-ncp-cli.git
+
+${OBJ_DIR}/dump.o : ${LOC_SDK}
+${OBJ_DIR}/gecko_bglib.o : ${LOC_SDK}
+${OBJ_DIR}/support.o : ${LOC_SDK}
+${OBJ_DIR}/uart_win.o : ${LOC_SDK}
+${OBJ_DIR}/uart_posix.o : ${LOC_SDK}
+${OBJ_DIR}/uart_win.o : ${LOC_SDK}
+${LOC_SDK}/protocol/bluetooth/ble_stack/src/host/gecko_bglib.c : ${LOC_SDK}
+${LOC_SDK}/support.c : ${LOC_SDK}
+${LOC_SDK}/uart/uart_posix.c : ${LOC_SDK}
+${LOC_SDK}/uart/uart_win.c : ${LOC_SDK}

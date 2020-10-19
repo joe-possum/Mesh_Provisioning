@@ -1,23 +1,191 @@
-#include <stdlib.h>
+/***************************************************************************//**
+ * @file
+ * @brief Event handling and application code for Empty NCP Host application example
+ *******************************************************************************
+ * # License
+ * <b>Copyright 2018 Silicon Laboratories Inc. www.silabs.com</b>
+ *******************************************************************************
+ *
+ * The licensor of this software is Silicon Laboratories Inc. Your use of this
+ * software is governed by the terms of Silicon Labs Master Software License
+ * Agreement (MSLA) available at
+ * www.silabs.com/about-us/legal/master-software-license-agreement. This
+ * software is distributed to you in Source Code format and is governed by the
+ * sections of the MSLA applicable to Source Code.
+ *
+ ******************************************************************************/
+
+/* standard library headers */
+#include <stdint.h>
+#include <string.h>
 #include <stdio.h>
-#include <assert.h>
-#include "host_gecko.h"
+#include <stdbool.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <math.h>
+#include <mbedtls/md5.h>
 #include <mbedtls/aes.h>
-#include <mbedtls/ccm.h>
 #include <mbedtls/cmac.h>
-#include "utility.h"
+#include <mbedtls/ccm.h>
+#include <assert.h>
+
+/* BG stack headers */
+#include "bg_types.h"
+#include "gecko_bglib.h"
+
+/* Own header */
+#include "app.h"
+//#include "dump.h"
 #include "cic.h"
+#include "provision_transaction.h"
 #include "mesh-fault-values.h"
 #include "mesh-model-lookup.h"
-#include "provision_transaction.h"
-#include <unistd.h>
-#include "protocol.h"
-#include "encryption.h"
+#include "../protocol.h"
+#include "../utility.h"
+#include "../encryption.h"
 
-#define VERBOSE_ADVERTISING 0
+#ifndef DUMP
+void dump_event(struct gecko_cmd_packet *);
+#endif
+int dump_advertisement(uint8 len, uint8*data);
+void dump_address(bd_addr address,uint8 type,int8 rssi);
+void dump_packet_type(uint8 packet_type);
+
+#define dprintf if(1)printf
+
+// App booted flag
+static bool appBooted = false;
+static struct {
+  uint32 timeout;
+  uint8 channel_map;
+  uint8 verbose, phy;
+  int8 limit, active, replay, log;
+  FILE *file;
+} config = {
+	    .timeout = 0,
+	    .active = 0,
+	    .channel_map = 7,
+	    .verbose = 0,
+	    .limit = -127,
+	    .phy = le_gap_phy_1m,
+	    .file = NULL,
+	    .replay = 0,
+	    .log = 0,
+};
+
+void parse_address(const char *fmt,bd_addr *address) {
+  char buf[3];
+  int octet;
+  for(uint8 i = 0; i < 6; i++) {
+    memcpy(buf,&fmt[3*i],2);
+    buf[2] = 0;
+    sscanf(buf,"%02x",&octet);
+    address->addr[5-i] = octet;
+  }
+}
+
+const char *getAppOptions(void) {
+  return "avcm<channel-map>l<rssi-limit>t<timeout>k<xskey>s<save-file>r<replay-file>L<log-file>";
+}
+
+void appOption(int option, char *arg) {
+  double dv;
+  int iv;
+  uint8_t key128[16];
+  switch(option) {
+  case 'a':
+    config.active = 1;
+    break;
+  case 'c':
+    config.phy = le_gap_phy_coded;
+    break;
+  case 'm':
+    sscanf(arg,"%d",&iv);
+    if((iv & 7)&&!(iv >> 3)) {
+      config.channel_map = iv;
+    } else {
+      fprintf(stderr,"channel map must be 0 - 7\n");
+      exit(1);
+    }
+    break;
+  case 'v':
+    config.verbose++;
+    break;
+  case 'l':
+    config.limit = atoi(arg);
+    break;
+  case 't':
+    sscanf(arg,"%lf",&dv);
+    config.timeout = round(dv*32768);
+    break;
+  case 'k':
+    if(':' == arg[1]) {
+      switch(arg[0]) {
+      case 'n':
+	assert(strlen(arg) > 35);
+	assert(':' == arg[34]);
+	optarg[34] = 0;
+	sscanf(&arg[35],"%i",&iv);
+	hex2bin(&arg[2],key128);
+	add_netkey(key128,iv);
+	return;
+	break;
+      case 'a':
+	assert(strlen(arg) == 34);
+	hex2bin(&arg[2],key128);
+	add_appkey(key128);
+	return;
+	break;
+      case 'd':
+	assert(strlen(arg) > 35);
+	assert(':' == arg[34]);
+	arg[34] = 0;
+	sscanf(&arg[35],"%i",&iv);
+	hex2bin(&arg[2],key128);
+	add_devkey(key128,iv);
+	return;
+	break;
+      }
+    }
+    fprintf(stderr,"Usage: ''-k n:<netkey>:<iv>'', ''-k a:<appkey>'', or ''-k d:<devkey>\n");
+    exit(1);
+    break;
+  case 'L':
+    config.file = fopen(arg,"w");
+    config.log = 1;
+    break;
+  case 's':
+    config.file = fopen(arg,"w");
+    break;
+  case 'r':
+    config.file = fopen(arg,"r");
+    config.replay = 1;
+    break;
+  default:
+    fprintf(stderr,"Unhandled option '-%c'\n",option);
+    exit(1);
+  }
+}
+
+void appInit(void) {
+  if(config.replay) {
+    uint8_t buf[512];
+    uint8_t ss = sizeof(struct gecko_msg_le_gap_extended_scan_response_evt_t);
+    struct gecko_msg_le_gap_extended_scan_response_evt_t *resp = (struct gecko_msg_le_gap_extended_scan_response_evt_t *)&buf[0];
+    while(1) {
+      assert(fread(buf,ss,1,config.file));
+      assert(fread(buf+ss,resp->data.len,1,config.file));
+      dump_address(resp->address,resp->address_type,resp->rssi);
+      dump_packet_type(resp->packet_type);
+      dump_advertisement(resp->data.len,resp->data.data);
+    }
+  }
+  return;
+}
 
 void dump_flags(uint8 flags) {
   printf("Flags: %02x\n",flags);
+  if(!config.verbose) return;
   printf("  LE Limited Discoverable Mode: %d\n",flags&1);
   printf("  LE General Discoverable Mode: %d\n",(flags>>1)&1);
   printf("  BR/EDR Not Supported: %d\n",(flags>>2)&1);
@@ -226,7 +394,7 @@ void dump_mesh_beacon(uint8 len, const uint8 *data) {
   char*RFU = "Reserved for Future Use";
   char *oob_str[16] = {"Other","Electronic/URI","2D machine-readable code","Bar code","NFC","Number","String",RFU,RFU,RFU,RFU,"On box","Inside box","On peice of paper","Indide manual","On device"};
   uint16 oob_info = (data[17]<<8) + data[18];
-  int comma = 0;
+  bool comma = 0;
   printf("Bluetooth Mesh Beacon:\nBeacon Type: ");
   switch(data[0]) {
   case 0:
@@ -348,81 +516,92 @@ void dump_packet_type(uint8 packet_type) {
   printf("Packet type: %s (%s)\n",cs,(packet_type&0x80)?"Extended":"Legacy");
 }
 
-void cmdline_decrypt(const char *message) {
-  fprintf(stderr,"%s(message:%s)\n",__PRETTY_FUNCTION__,message);
-  uint8_t pdu[31];
-  int n = strlen(message);
-  if(n & 1) {
-    fprintf(stderr,"Odd hex message length\n");
-    exit(1);
-  }
-  n >>= 1;
-  char buf[3];
-  buf[2] = 0;
-  for(int i = 0; i < n; i++) {
-    unsigned int v;
-    memcpy(buf,&message[i<<1],2);
-    assert(1 == sscanf(buf,"%x",&v));
-    pdu[2+i] = v;
-  }
-  pdu[0] = 1+n;
-  pdu[1] = 0x2a;
-  dump_advertisement(2+n,pdu);
-  exit(0);
-}
-
 uint8 unique[512][16],md5sum[16];
 uint16 ucount = 0;
 
 
-int main(int argc, char *argv[]) {
-  uint8_t buf[512];
-  uint8_t ss = sizeof(struct gecko_msg_le_gap_extended_scan_response_evt_t);
-  struct gecko_msg_le_gap_extended_scan_response_evt_t *resp = (struct gecko_msg_le_gap_extended_scan_response_evt_t *)&buf[0];
-  int done = 0;
-  while(!done) {
-    int rc = getopt(argc,argv,"k:");
-    switch(rc) {
-    case 'k':
-      if(':' == optarg[1]) {
-	uint8_t key128[16];
-	int iv;
-	switch(optarg[0]) {
-	case 'n':
-	  assert(strlen(optarg) > 35);
-	  assert(':' == optarg[34]);
-	  optarg[34] = 0;
-	  sscanf(&optarg[35],"%i",&iv);
-	  hex2bin(&optarg[2],key128);
-	  add_netkey(key128,iv);
-	  break;
-	case 'a':
-	  assert(strlen(optarg) == 34);
-	  hex2bin(&optarg[2],key128);
-	  add_appkey(key128);
-	  break;
-	case 'd':
-	  assert(strlen(optarg) > 35);
-	  assert(':' == optarg[34]);
-	  optarg[34] = 0;
-	  sscanf(&optarg[35],"%i",&iv);
-	  hex2bin(&optarg[2],key128);
-	  add_devkey(key128,iv);
-	  break;
-	}
-      }
-      break;
-    default:
-      done = 1;
-      break;
-    }
+/***********************************************************************************************//**
+												  *  \brief  Event handler function.
+												  *  \param[in] evt Event pointer.
+												  **************************************************************************************************/
+void appHandleEvents(struct gecko_cmd_packet *evt)
+{
+  mbedtls_md5_context ctx;
+  if (NULL == evt) {
+    return;
   }
-  while(1) {
-    assert(fread(buf,ss,1,stdin));
-    assert(fread(buf+ss,resp->data.len,1,stdin));
-    if(dump_advertisement(resp->data.len,resp->data.data)) {
-      return 1;
+
+  // Do not handle any events until system is booted up properly.
+  if ((BGLIB_MSG_ID(evt->header) != gecko_evt_system_boot_id)
+      && !appBooted) {
+#if defined(DEBUG)
+    printf("Event: 0x%04x\n", BGLIB_MSG_ID(evt->header));
+#endif
+    usleep(50000);
+    return;
+  }
+
+  /* Handle events */
+#ifdef DUMP
+  dump_event(evt);
+#endif
+  switch (BGLIB_MSG_ID(evt->header)) {
+  case gecko_evt_system_boot_id:
+    appBooted = true;
+    mbedtls_md5_init(&ctx);
+    ucount = 0;
+    gecko_cmd_system_linklayer_configure(3,1,&config.channel_map);
+    gecko_cmd_le_gap_set_discovery_extended_scan_response(1);
+    gecko_cmd_le_gap_set_discovery_timing(config.phy,1000,1000);
+    gecko_cmd_le_gap_set_discovery_type(config.phy,config.active);
+    gecko_cmd_le_gap_start_discovery(config.phy,le_gap_discover_observation);
+    if(config.timeout) {
+      gecko_cmd_hardware_set_soft_timer(config.timeout,0,1);
     }
-    fflush(stdout);
+    break;
+  case gecko_evt_hardware_soft_timer_id: /******************************************************************* hardware_soft_timer **/
+#define ED evt->data.evt_hardware_soft_timer
+    gecko_cmd_le_gap_end_procedure();
+    exit(0);
+    break;
+#undef ED
+
+  case gecko_evt_le_gap_extended_scan_response_id:
+#define ED evt->data.evt_le_gap_extended_scan_response
+    if(ED.rssi < config.limit) return;
+    if(config.log) {
+      fwrite(&ED,sizeof(ED),1,config.file);
+      fwrite(&ED.data.data[0],ED.data.len,1,config.file);
+      fflush(config.file);
+    }
+    mbedtls_md5_starts_ret(&ctx);
+    mbedtls_md5_update_ret(&ctx,&ED.address.addr[0],6);
+    mbedtls_md5_update_ret(&ctx,&ED.data.data[0],ED.data.len);
+    mbedtls_md5_finish_ret(&ctx,md5sum);
+    for(int i = 0; i < ucount; i++)
+      if(0 == memcmp(unique[i],md5sum,16)) return;
+    memcpy(unique[ucount++],md5sum,16);
+    if(config.file && !config.log) {
+      fwrite(&ED,sizeof(ED),1,config.file);
+      fwrite(&ED.data.data[0],ED.data.len,1,config.file);
+      fflush(config.file);
+    }
+    dump_address(ED.address,ED.address_type,ED.rssi);
+    dump_packet_type(ED.packet_type);
+    if(config.verbose > 1) dump_event(evt);
+    if(dump_advertisement(ED.data.len,ED.data.data) && !(config.verbose > 1)) {
+      dump_event(evt);
+      exit(1);
+    };
+    printf("\n");
+    break;
+#undef ED
+  case gecko_evt_le_gap_scan_response_id: /***************************************************************** le_gap_scan_response **/
+#define ED evt->data.evt_le_gap_scan_response
+    dump_event(evt);
+    break;
+#undef ED
+  default:
+    break;
   }
 }
