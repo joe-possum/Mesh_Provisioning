@@ -1,6 +1,5 @@
 /* 
  * Extract Bluetooth Mesh AD type packets from a bg-ncp-dump-advertisement -L log 
- * 
  */
 
 #include <stdint.h>
