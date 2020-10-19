@@ -4,11 +4,28 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-/* BG stack headers */
-#include "bg_types.h"
-#include "gecko_bglib.h"
+typedef struct uint8array {
+  uint8_t len;
+  uint8_t data[];
+} uint8array;
 
-int dump_element(uint8 type,uint8 len, uint8*data) {
+struct __attribute__((packed)) gecko_msg_le_gap_extended_scan_response_evt_t
+{
+    uint8_t             packet_type;
+    uint8_t             address[6];
+    uint8_t             address_type;
+    uint8_t             bonding;
+    uint8_t             primary_phy;
+    uint8_t             secondary_phy;
+    uint8_t             adv_sid;
+    int8_t              tx_power;
+    int8_t              rssi;
+    uint8_t             channel;
+    uint16_t            periodic_interval;
+    uint8array          data;
+};
+
+int dump_element(uint8_t type,uint8_t len, uint8_t*data) {
   switch(type) {
   case 0x01:
     break;
@@ -53,11 +70,11 @@ int dump_element(uint8 type,uint8 len, uint8*data) {
   return 0;
 }
 
-int dump_advertisement(uint8 len, uint8*data) {
-  uint8 i = 0;
+int dump_advertisement(uint8_t len, uint8_t *data) {
+  uint8_t i = 0;
   while(i < len) {
-    uint8 elen = data[i++];
-    uint8 type = data[i];
+    uint8_t elen = data[i++];
+    uint8_t type = data[i];
     if(dump_element(type,elen-1,&data[i+1])) return 1;
     i += elen;
   }
