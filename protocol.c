@@ -320,6 +320,7 @@ struct access_info {
   uint8_t akf, aid;
 };
 struct mesh_message {
+  uint8_t netkey[16];
   struct network network;
   struct segment_info segment_info;
   union {
@@ -380,11 +381,123 @@ void decode_upper_transport_access_pdu(struct mesh_message *message, uint8_t len
   decode_access(len,data);
 }
 
+struct friend_requests {
+  struct friend_requests *next;
+  uint16_t LPNAddress, LPNCounter;
+} *friend_requests = NULL;
+
+struct friend_requests *find_friend_request(uint16_t LPNAddress) {
+  for(struct friend_requests *p = friend_requests; p; p = p->next) {
+    if(p->LPNAddress == LPNAddress) return p;
+  }
+  return NULL;
+}
+  
+void add_friend_request(uint16_t LPNAddress, uint16_t LPNCounter) {
+  struct friend_requests *p = find_friend_request(LPNAddress);
+  if(!p) {
+    p = malloc(sizeof(struct friend_requests));
+    p->LPNAddress = LPNAddress;
+    p->next = friend_requests;
+    friend_requests = p;
+  }
+  p->LPNCounter = LPNCounter;
+}
+
+#define P(X) printf(" %s:%s",#X,hex(sizeof(p->X),p->X));
+void decode_friend_poll(struct mesh_message *message, uint8_t len, uint8_t *data) {
+  printf("  Friend Poll { FSN:%s }\n",hex(1,data));
+}
+
+void decode_friend_update(struct mesh_message *message, uint8_t len, uint8_t *data) {
+  struct __attribute__((packed)) {
+    uint8_t Flags[1],IVI[4],MD[1];
+  } *p = (void*)data;
+  printf("  Friend Update {");
+  P(Flags);
+  P(IVI);
+  P(MD);
+  printf(" }\n");
+}
+
+void decode_friend_request(struct mesh_message *message, uint8_t len, uint8_t *data) {
+  struct __attribute__((packed)) {
+    uint8_t Criteria[1],ReceiveDelay[1],PollTimeout[3],PreviousAddress[2],NumElements[1],LPNCounter[2];
+  } *p = (void*)data;
+  printf("  Friend Request {");
+  P(Criteria);
+  P(ReceiveDelay);
+  P(PollTimeout);
+  P(PreviousAddress);
+  P(NumElements);
+  P(LPNCounter);
+  printf(" }\n");
+  add_friend_request(message->network.src, be2uint16(p->LPNCounter));
+}
+
+void decode_friend_offer(struct mesh_message *message, uint8_t len, uint8_t *data) {
+  struct __attribute__((packed)) {
+    uint8_t ReceiveWindow[1],QueueSize[1],SubscriptionListSize[1],RSSI[1],FriendCounter[2];
+  } *p = (void*)data;
+  printf("  Friend Offer {");
+  P(ReceiveWindow);
+  P(QueueSize);
+  P(SubscriptionListSize);
+  P(RSSI);
+  P(FriendCounter);
+  printf(" }\n");
+  struct friend_requests *r = find_friend_request(message->network.dst);
+  if(p) add_friendship(message->netkey, r->LPNAddress,message->network.src,r->LPNCounter,be2uint16(p->FriendCounter)); 
+}
+
+void decode_heartbeat(struct mesh_message *message, uint8_t len, uint8_t *data) {
+  printf("  Heartbeat:: InitTTL:%s Features:",hex(1,data));
+  char *features[4] = {"relay","proxy","friend","low power"};
+  int count = 0;
+  for(int i = 0; i < 4; i++) {
+    printf("%s%s",(count)?"|":"",features[i]);
+    count++;
+  }
+  printf("\n");
+}
+
 void decode_upper_transport_control_pdu(struct mesh_message *message, uint8_t len, uint8_t *data) {
   printf("decode_upper_transport_control_pdu(opcode:%x, %s)\n",
 	 message->lower.control_info.opcode, hex(len,data));
   assert(message->lower.control_info.opcode > 0);
   assert(message->lower.control_info.opcode < 0xb);
+  switch(message->lower.control_info.opcode) {
+  case 1:
+    decode_friend_poll(message,len,data);
+    break;
+  case 2:
+    decode_friend_update(message,len,data);
+    break;
+  case 3:
+    decode_friend_request(message,len,data);
+    break;
+  case 4:
+    decode_friend_offer(message,len,data);
+    break;
+  case 5:
+    printf("  Friend Clear\n");
+    break;
+  case 6:
+    printf("  Friend Clear Confirm\n");
+    break;
+  case 7:
+    printf("  Friend Subription List Add\n");
+    break;
+  case 8:
+    printf("  Friend Subription List Remove\n");
+    break;
+  case 9:
+    printf("  Friend Subription List Confirm\n");
+    break;
+  case 0xa:
+    decode_heartbeat(message,len,data);
+    break;
+  }
 }
 
 void decode_lower_transport_pdu(struct mesh_message *message, uint8_t len, uint8_t *data) {
@@ -431,7 +544,7 @@ void decode_lower_transport_pdu(struct mesh_message *message, uint8_t len, uint8
 	decode_upper_transport_control_pdu(message,len-4,data+4);	
       }
     } else {
-      printf("Segmented Access message:: AKF:%d, AID:%02x\n",a->akf,a->aid);
+      printf("Segmented Access message:: SRC:%04x, DST:%04x, AKF:%d, AID:%02x\n",n->src, n->dst, a->akf,a->aid);
       if(rc) {
 	decode_upper_transport_access_pdu(message, rc->len,rc->data);
 	rc->clear(rc);
@@ -460,9 +573,9 @@ void decode_lower_transport_pdu(struct mesh_message *message, uint8_t len, uint8
 
 void decode_network_pdu(uint8_t len, uint8_t *data) {
   //printf("decode_network_pdu(%s)\n",hex(len,data));
-  len = decrypt(len,data);
-  if(!len) return;
   struct mesh_message info;
+  len = decrypt(len,data,info.netkey);
+  if(!len) return;
   struct network *p = &info.network;
   //printf(" after decryption: %s\n",hex(len,data));
   p->nid = data[0] & 0x7f;

@@ -125,7 +125,7 @@ int encrypt(uint8_t len, uint8_t *pdu) {
   return 0;
 }
 
-int decrypt(uint8_t len, uint8_t data[]) {
+int decrypt(uint8_t len, uint8_t data[], uint8_t *netkey) {
   dprintf("decrypt(%s)\n",hex(len,data));
   struct netkey *nk = deobfuscate(len,data);
   if(!nk) return 0;
@@ -169,6 +169,7 @@ int decrypt(uint8_t len, uint8_t data[]) {
     dprintf("Success!\n");
     dprintf("    ciphertext: %s\n",hex(cipher_len,ciphertext));
     memcpy(&data[7],ciphertext,cipher_len);
+    memcpy(netkey,nk->network,16);
     break;
   default:
     printf("mbedtls_ccm_auth_decrypt returned -%x\n",-rc);
@@ -282,6 +283,19 @@ void add_appkey(const uint8_t *key128) {
   k4(16,ak->key,&ak->aid);
   printf("  key: %s\n",hex(16,ak->key));
   printf("  AID: %x\n",ak->aid);
+}
+
+void add_friendship(uint8_t *netkey, uint16_t LPNAddress,uint16_t FriendAddress,uint16_t LPNCounter,uint16_t FriendCounter) {
+  uint8_t p[9] = { 1, };
+  memcpy(p+1,beuint16(LPNAddress),2);
+  memcpy(p+3,beuint16(FriendAddress),2);
+  memcpy(p+5,beuint16(LPNCounter),2);
+  memcpy(p+7,beuint16(FriendCounter),2);
+  struct netkey *nk = malloc(sizeof(struct netkey));
+  assert(nk);
+  nk->next = netkeys;
+  netkeys = nk;
+  k2(16,netkey,sizeof(p),p,&nk->nid,nk->encryption,nk->privacy);
 }
 
 #if(0)
